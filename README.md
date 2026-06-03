@@ -7,14 +7,14 @@ Clean, independent codebase for the wind semantic forecasting thesis. It contain
 - `app/` - thesis-relevant Python modules for preprocessing, semantic compression, retrieval, HITL routing, memory follow-up, and review feedback.
 - `scripts/` - runnable scripts for the HITL UI and live-data workflow.
 - `theory_experiments/` - offline experiment scripts for numeric forecasting, semantic phase prediction, GRU phase prediction, and compression metrics.
-- `data/noaa_5min/` - final NOAA 5-minute KBOS dataset used by the benchmark.
+- `data/noaa_5min/` - final NOAA 5-minute KBOS dataset used by the offline theory benchmark.
 - `data/semantic/` - 5-minute semantic states, embeddings, regime profiles, and supporting files.
 - `artifacts/` - saved encoder/tokenizer/search-index/model artifacts needed by the pipeline.
 - `results/5min_two_seed_experiments/` - final two-seed result tables and compression metrics used for thesis writing.
 
 ## Final Experimental Setup
 
-The final benchmark uses NOAA 5-minute KBOS observations, not the older hourly setup.
+The final offline theory benchmark uses NOAA 5-minute KBOS observations, not the older hourly setup. The HITL/live demo is separate: it uses the live AviationWeather/METAR stream through a semantic-state adapter, so it should be described as a live METAR semantic review layer rather than as a 5-minute live benchmark.
 
 - Seeds: `42`, `123`
 - Numeric horizons: `1h`, `3h`, `6h`, `12h`
@@ -64,7 +64,7 @@ $env:SEMANTIC_LLM_MODEL="gpt-4o-mini"
 python scriptsun_hitl_ui.py
 ```
 
-Open the browser URL printed by the server. The UI uses fixed thesis defaults: LLM follow-up on, memory/RAG on, live 5-minute state on, transition predictor, top-3 phase candidates, and five historical analogs.
+Open the browser URL printed by the server. The UI uses fixed thesis defaults: LLM follow-up on, memory/RAG on, live METAR semantic state on, transition predictor, top-3 phase candidates, and five historical analogs.
 
 ## Result Interpretation Notes
 
@@ -79,4 +79,4 @@ Open the browser URL printed by the server. The UI uses fixed thesis defaults: L
 
 - API keys are not included. Set `OPENAI_API_KEY` only if LLM-backed follow-up is needed.
 - Runtime logs, virtual environments, cache folders, and feedback logs are excluded.
-- The older hourly benchmark is not the final benchmark and should only be treated as background/ablation material.
+- The older hourly offline benchmark is not the final theory benchmark and should only be treated as background/ablation material. The live HITL adapter may still operate at METAR/live-feed cadence depending on available observations.

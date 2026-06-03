@@ -263,7 +263,7 @@ async function init() {
 
   const syncMessage = sync.message ? `<div class="meta">${pill(sync.message)}</div>` : "";
   addMessage("assistant", `
-    <div class="meta">${pill("workflow ready", "strong")}${pill("LLM follow-up on")}${pill("Memory/RAG on")}${pill("live 5-min state")}</div>
+    <div class="meta">${pill("workflow ready", "strong")}${pill("LLM follow-up on")}${pill("Memory/RAG on")}${pill("live METAR state")}</div>
     <div class="answer">Use the core action buttons or ask naturally. The interface now runs a fixed optimal HITL configuration, so no manual checkboxes or advanced path settings are required.</div>
     ${syncMessage}
   `);
