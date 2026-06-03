@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HITL Wind Review</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="side">
+        <div class="brand">
+          <span class="mark"></span>
+          <div>
+            <h1>HITL Wind Review</h1>
+            <p id="metadataStatus">Loading metadata...</p>
+          </div>
+        </div>
+
+        <label>Metadata <input id="metadata" type="text" spellcheck="false" /></label>
+
+        <div class="grid2">
+          <label>Window ID <input id="windowId" type="text" placeholder="latest" /></label>
+          <label>Top K <input id="topK" type="number" min="1" max="20" value="5" /></label>
+        </div>
+
+        <div class="window-tools">
+          <div class="grid2">
+            <label>Token Filter <input id="tokenFilter" type="number" min="0" placeholder="any" /></label>
+            <label>Recent Count <input id="windowLimit" type="number" min="5" max="200" value="30" /></label>
+          </div>
+          <button id="loadWindows" type="button">Load Windows</button>
+          <select id="windowSelect" size="8" aria-label="Recent semantic windows"></select>
+        </div>
+
+        <div class="grid2">
+            <label>Phase History <input id="phaseHistory" type="number" min="1" max="12" value="3" /></label>
+          <label>Phase Step <input id="phaseStep" type="number" min="1" max="48" value="1" /></label>
+        </div>
+
+        <div class="grid2">
+          <label>Phase Top K <input id="phaseTopK" type="number" min="1" max="10" value="3" /></label>
+          <label>Analogs <input id="phaseAnalogK" type="number" min="1" max="20" value="5" /></label>
+        </div>
+
+        <div class="grid2">
+          <label>Min Support <input id="phaseMinSupport" type="number" min="1" max="100" value="5" /></label>
+        </div>
+
+        <label>Live History <input id="livePhaseHistory" type="text" spellcheck="false" /></label>
+        <label>Live State <input id="livePhaseState" type="text" spellcheck="false" /></label>
+        <label>Live Raw CSV <input id="liveRawPath" type="text" spellcheck="false" /></label>
+
+        <div class="grid2" hidden>
+          <label>Numeric Steps <input id="numericSteps" type="number" min="1" max="12" value="6" /></label>
+          <label>Numeric Mode
+            <select id="numericMode">
+              <option value="auto">auto</option>
+              <option value="lstm">lstm</option>
+              <option value="trend">trend</option>
+            </select>
+          </label>
+        </div>
+
+        <label hidden>Numeric Model <input id="numericModelPath" type="text" spellcheck="false" /></label>
+
+        <div class="grid2">
+          <label>Phase Model
+            <select id="phaseModelMode">
+              <option value="auto">auto</option>
+              <option value="gru">gru</option>
+              <option value="transition">transition</option>
+            </select>
+          </label>
+          <label>Phase Artifact <input id="phaseModelPath" type="text" spellcheck="false" /></label>
+        </div>
+
+        <div class="toggles">
+          <label class="check"><input id="enableRag" type="checkbox" checked /> RAG</label>
+          <label class="check"><input id="enableLlm" type="checkbox" /> LLM</label>
+          <label class="check"><input id="enableAgentGraph" type="checkbox" checked /> LangGraph</label>
+          <label class="check"><input id="preferLivePhase" type="checkbox" checked /> Live phase</label>
+        </div>
+
+        <div class="quick">
+          <button data-prompt="Explain this compressed wind state">State</button>
+          <button data-prompt="Have we seen similar past wind regimes before?">Similar</button>
+          <button data-prompt="Predict the next phase from the real time wind windows">Live Phase</button>
+          <button data-prompt="Explain why the predicted phase was selected">Phase Why</button>
+          <button data-prompt="Flag this explanation as needing review">Flag</button>
+        </div>
+      </section>
+
+      <section class="chat">
+        <div id="messages" class="messages"></div>
+        <form id="chatForm" class="composer">
+          <textarea id="question" rows="2" placeholder="Ask about selected state, similar regimes, phase prediction, or feedback"></textarea>
+          <button type="submit">Send</button>
+        </form>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

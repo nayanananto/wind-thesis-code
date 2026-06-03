@@ -1,0 +1,5 @@
+rank_candidate,sequence_length,embedding_dim,units,dropout,batch_size,epochs,learning_rate,epochs_ran,val_top1_accuracy,val_topk_accuracy,val_mean_reciprocal_rank,val_macro_f1
+1,3,8,24,0.1,16,25,0.001,25,0.8706,0.9853,0.9278,0.8586
+3,6,8,32,0.15,16,25,0.001,25,0.8645,0.9819,0.9238,0.8534
+4,6,12,48,0.2,32,25,0.001,19,0.8628,0.9845,0.923,0.8467
+2,4,8,32,0.1,16,25,0.001,21,0.8594,0.9862,0.9207,0.8463

@@ -1,0 +1,89 @@
+{
+  "artifact_type": "hitl_phase_gru",
+  "station": "KBOS",
+  "semantic_metadata_path": "data\\metadata\\kbos_hourly_hitl_semantic_build.json",
+  "semantic_run_name": "kbos_hourly_hitl",
+  "horizon": 1,
+  "sequence_length": 3,
+  "n_tokens": 8,
+  "feature_columns": [
+    "token_distance",
+    "wind_speed_mean",
+    "wind_speed_std",
+    "wind_speed_min",
+    "wind_speed_max",
+    "wind_speed_range",
+    "ramp_abs_mean",
+    "ramp_abs_max",
+    "gust_factor",
+    "direction_abs_change_mean_deg",
+    "direction_net_turn_deg",
+    "vector_resultant_strength",
+    "hour_sin_mean",
+    "hour_cos_mean",
+    "dow_sin_mean",
+    "dow_cos_mean",
+    "embedding_00",
+    "embedding_01",
+    "embedding_02",
+    "embedding_03",
+    "embedding_04",
+    "embedding_05",
+    "embedding_06",
+    "embedding_07"
+  ],
+  "best_config": {
+    "sequence_length": 3,
+    "embedding_dim": 8,
+    "units": 24,
+    "dropout": 0.1,
+    "batch_size": 16,
+    "epochs": 25,
+    "learning_rate": 0.001
+  },
+  "best_validation": {
+    "rank_candidate": 1,
+    "sequence_length": 3,
+    "embedding_dim": 8,
+    "units": 24,
+    "dropout": 0.1,
+    "batch_size": 16,
+    "epochs": 25,
+    "learning_rate": 0.001,
+    "epochs_ran": 25,
+    "val_top1_accuracy": 0.8706,
+    "val_topk_accuracy": 0.9853,
+    "val_mean_reciprocal_rank": 0.9278,
+    "val_macro_f1": 0.8586
+  },
+  "test_metrics": {
+    "top1_accuracy": 0.8474,
+    "topk_accuracy": 0.9802,
+    "mean_reciprocal_rank": 0.9147,
+    "macro_f1": 0.7872
+  },
+  "persistence_metrics": {
+    "top1_accuracy": 0.8086,
+    "topk_accuracy": 0.8371,
+    "mean_reciprocal_rank": 0.8477,
+    "macro_f1": 0.77
+  },
+  "transition_metrics": {
+    "top1_accuracy": 0.8069,
+    "topk_accuracy": 0.9233,
+    "mean_reciprocal_rank": 0.874,
+    "macro_f1": 0.7676
+  },
+  "token_labels": {
+    "0": "moderate-flow gusty turning regime",
+    "1": "moderate-flow gusty regime",
+    "2": "moderate-flow gusty regime",
+    "3": "moderate-flow gusty regime",
+    "4": "calm persistent regime",
+    "5": "moderate-flow gusty regime",
+    "6": "moderate-flow stable gusty regime",
+    "7": "calm turning regime"
+  },
+  "model_path": "artifacts\\hitl_phase_gru\\kbos_hourly_v1\\model.keras",
+  "feature_scaler_path": "artifacts\\hitl_phase_gru\\kbos_hourly_v1\\feature_scaler.joblib"
+}

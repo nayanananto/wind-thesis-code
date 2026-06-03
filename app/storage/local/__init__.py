@@ -1,0 +1,2 @@
+"""Local disk storage adapters."""
+

@@ -1,0 +1,42 @@
+{
+  "run_name": "test_semantic",
+  "window_size": 24,
+  "step_size": 24,
+  "n_windows": 1789,
+  "embedding_dim": 4,
+  "n_tokens": 4,
+  "feature_columns": [
+    "missing_fraction",
+    "wind_speed_mean",
+    "wind_speed_std",
+    "wind_speed_min",
+    "wind_speed_max",
+    "wind_speed_p10",
+    "wind_speed_p90",
+    "wind_speed_range",
+    "ramp_abs_mean",
+    "ramp_abs_max",
+    "calm_fraction",
+    "strong_fraction",
+    "gust_factor",
+    "temperature_2m_c_mean",
+    "temperature_2m_c_std",
+    "relative_humidity_2m_mean",
+    "relative_humidity_2m_std",
+    "hour_sin_mean",
+    "hour_sin_std",
+    "hour_cos_mean",
+    "hour_cos_std",
+    "dow_sin_mean",
+    "dow_sin_std",
+    "dow_cos_mean",
+    "dow_cos_std"
+  ],
+  "output_paths": {
+    "features": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\semantic\\test_semantic_window_features.csv",
+    "embeddings": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\semantic\\test_semantic_embeddings.csv",
+    "token_summary": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\semantic\\test_semantic_token_summary.csv",
+    "encoder": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\artifacts\\semantic_encoder\\test_semantic_encoder.joblib",
+    "tokenizer": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\artifacts\\tokenizer\\test_semantic_tokenizer.joblib"
+  }
+}

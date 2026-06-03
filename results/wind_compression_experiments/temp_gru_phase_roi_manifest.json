@@ -1,0 +1,166 @@
+{
+  "states_path": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\semantic\\kbos_5min_phase_semantic_states.csv",
+  "rows": 7665,
+  "n_tokens": 8,
+  "feature_columns": [
+    "token_distance",
+    "wind_speed_mean",
+    "wind_speed_std",
+    "wind_speed_min",
+    "wind_speed_max",
+    "wind_speed_range",
+    "ramp_abs_mean",
+    "ramp_abs_max",
+    "gust_factor",
+    "direction_abs_change_mean_deg",
+    "direction_net_turn_deg",
+    "vector_resultant_strength",
+    "hour_sin_mean",
+    "hour_cos_mean",
+    "dow_sin_mean",
+    "dow_cos_mean",
+    "embedding_00",
+    "embedding_01",
+    "embedding_02",
+    "embedding_03",
+    "embedding_04",
+    "embedding_05",
+    "embedding_06",
+    "embedding_07"
+  ],
+  "horizons": [
+    1,
+    3,
+    6,
+    12
+  ],
+  "configs": [
+    {
+      "batch_size": 32,
+      "epochs": 28,
+      "learning_rate": 0.001,
+      "patience": 4,
+      "config_id": "gru_h3_e8_u24_d010_lr1e3",
+      "history_length": 3,
+      "embedding_dim": 8,
+      "units": 24,
+      "dropout": 0.1
+    },
+    {
+      "batch_size": 32,
+      "epochs": 28,
+      "learning_rate": 0.001,
+      "patience": 4,
+      "config_id": "gru_h3_e12_u32_d015_lr1e3",
+      "history_length": 3,
+      "embedding_dim": 12,
+      "units": 32,
+      "dropout": 0.15
+    },
+    {
+      "batch_size": 32,
+      "epochs": 28,
+      "learning_rate": 0.0005,
+      "patience": 4,
+      "config_id": "gru_h3_e16_u48_d020_lr5e4",
+      "history_length": 3,
+      "embedding_dim": 16,
+      "units": 48,
+      "dropout": 0.2
+    },
+    {
+      "batch_size": 32,
+      "epochs": 28,
+      "learning_rate": 0.001,
+      "patience": 4,
+      "config_id": "gru_h4_e8_u32_d010_lr1e3",
+      "history_length": 4,
+      "embedding_dim": 8,
+      "units": 32,
+      "dropout": 0.1
+    },
+    {
+      "batch_size": 32,
+      "epochs": 28,
+      "learning_rate": 0.001,
+      "patience": 4,
+      "config_id": "gru_h4_e12_u48_d015_lr1e3",
+      "history_length": 4,
+      "embedding_dim": 12,
+      "units": 48,
+      "dropout": 0.15
+    },
+    {
+      "batch_size": 32,
+      "epochs": 28,
+      "learning_rate": 0.0005,
+      "patience": 4,
+      "config_id": "gru_h4_e16_u64_d020_lr5e4",
+      "history_length": 4,
+      "embedding_dim": 16,
+      "units": 64,
+      "dropout": 0.2
+    },
+    {
+      "batch_size": 32,
+      "epochs": 28,
+      "learning_rate": 0.001,
+      "patience": 4,
+      "config_id": "gru_h6_e8_u32_d015_lr1e3",
+      "history_length": 6,
+      "embedding_dim": 8,
+      "units": 32,
+      "dropout": 0.15
+    },
+    {
+      "batch_size": 32,
+      "epochs": 28,
+      "learning_rate": 0.001,
+      "patience": 4,
+      "config_id": "gru_h6_e12_u48_d020_lr1e3",
+      "history_length": 6,
+      "embedding_dim": 12,
+      "units": 48,
+      "dropout": 0.2
+    },
+    {
+      "batch_size": 32,
+      "epochs": 28,
+      "learning_rate": 0.0005,
+      "patience": 4,
+      "config_id": "gru_h6_e16_u64_d025_lr5e4",
+      "history_length": 6,
+      "embedding_dim": 16,
+      "units": 64,
+      "dropout": 0.25
+    },
+    {
+      "batch_size": 32,
+      "epochs": 28,
+      "learning_rate": 0.001,
+      "patience": 4,
+      "config_id": "gru_h9_e12_u48_d020_lr1e3",
+      "history_length": 9,
+      "embedding_dim": 12,
+      "units": 48,
+      "dropout": 0.2
+    },
+    {
+      "batch_size": 32,
+      "epochs": 28,
+      "learning_rate": 0.0005,
+      "patience": 4,
+      "config_id": "gru_h9_e16_u64_d025_lr5e4",
+      "history_length": 9,
+      "embedding_dim": 16,
+      "units": 64,
+      "dropout": 0.25
+    }
+  ],
+  "seed": 42,
+  "split": {
+    "train_end": 5365,
+    "val_end": 6515,
+    "test_end": 7665
+  }
+}

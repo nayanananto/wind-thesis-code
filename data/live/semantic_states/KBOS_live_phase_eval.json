@@ -1,0 +1,364 @@
+{
+  "summary": {
+    "cases": 13,
+    "history_length": 4,
+    "horizon_steps": 1,
+    "top_k": 3,
+    "top1_accuracy": 0.6923,
+    "topk_accuracy": 0.7692,
+    "mean_reciprocal_rank": 0.7179,
+    "low_support_cases": 0,
+    "mean_support": 254.54
+  },
+  "rows": [
+    {
+      "case_index": 3,
+      "source_window_id": "live_KBOS_202605211254_202605211854",
+      "actual_window_id": "live_KBOS_202605211454_202605211954",
+      "sequence": [
+        6,
+        6,
+        6,
+        6
+      ],
+      "actual_token": 4,
+      "actual_regime_name": "moderate-flow stable gusty regime",
+      "top1_token": 6,
+      "top1_regime_name": "calm persistent regime",
+      "top1_correct": false,
+      "topk_correct": false,
+      "actual_rank": NaN,
+      "reciprocal_rank": 0.0,
+      "support": 228,
+      "support_is_sufficient": true,
+      "transition_source": "exact_sequence",
+      "candidate_tokens": [
+        6,
+        1,
+        2
+      ]
+    },
+    {
+      "case_index": 4,
+      "source_window_id": "live_KBOS_202605211454_202605211954",
+      "actual_window_id": "live_KBOS_202605211554_202605212054",
+      "sequence": [
+        6,
+        6,
+        6,
+        4
+      ],
+      "actual_token": 4,
+      "actual_regime_name": "moderate-flow stable gusty regime",
+      "top1_token": 4,
+      "top1_regime_name": "moderate-flow stable gusty regime",
+      "top1_correct": true,
+      "topk_correct": true,
+      "actual_rank": 1.0,
+      "reciprocal_rank": 1.0,
+      "support": 14,
+      "support_is_sufficient": true,
+      "transition_source": "exact_sequence",
+      "candidate_tokens": [
+        4,
+        5
+      ]
+    },
+    {
+      "case_index": 5,
+      "source_window_id": "live_KBOS_202605211554_202605212054",
+      "actual_window_id": "live_KBOS_202605211654_202605212154",
+      "sequence": [
+        6,
+        6,
+        4,
+        4
+      ],
+      "actual_token": 4,
+      "actual_regime_name": "moderate-flow stable gusty regime",
+      "top1_token": 4,
+      "top1_regime_name": "moderate-flow stable gusty regime",
+      "top1_correct": true,
+      "topk_correct": true,
+      "actual_rank": 1.0,
+      "reciprocal_rank": 1.0,
+      "support": 14,
+      "support_is_sufficient": true,
+      "transition_source": "exact_sequence",
+      "candidate_tokens": [
+        4,
+        7
+      ]
+    },
+    {
+      "case_index": 6,
+      "source_window_id": "live_KBOS_202605211654_202605212154",
+      "actual_window_id": "live_KBOS_202605211754_202605212254",
+      "sequence": [
+        6,
+        4,
+        4,
+        4
+      ],
+      "actual_token": 6,
+      "actual_regime_name": "calm persistent regime",
+      "top1_token": 4,
+      "top1_regime_name": "moderate-flow stable gusty regime",
+      "top1_correct": false,
+      "topk_correct": false,
+      "actual_rank": NaN,
+      "reciprocal_rank": 0.0,
+      "support": 15,
+      "support_is_sufficient": true,
+      "transition_source": "exact_sequence",
+      "candidate_tokens": [
+        4,
+        7,
+        5
+      ]
+    },
+    {
+      "case_index": 7,
+      "source_window_id": "live_KBOS_202605211754_202605212254",
+      "actual_window_id": "live_KBOS_202605211854_202605212354",
+      "sequence": [
+        4,
+        4,
+        4,
+        6
+      ],
+      "actual_token": 6,
+      "actual_regime_name": "calm persistent regime",
+      "top1_token": 6,
+      "top1_regime_name": "calm persistent regime",
+      "top1_correct": true,
+      "topk_correct": true,
+      "actual_rank": 1.0,
+      "reciprocal_rank": 1.0,
+      "support": 648,
+      "support_is_sufficient": true,
+      "transition_source": "last_token_markov",
+      "candidate_tokens": [
+        6,
+        1,
+        2
+      ]
+    },
+    {
+      "case_index": 8,
+      "source_window_id": "live_KBOS_202605211854_202605212354",
+      "actual_window_id": "live_KBOS_202605211954_202605220054",
+      "sequence": [
+        4,
+        4,
+        6,
+        6
+      ],
+      "actual_token": 6,
+      "actual_regime_name": "calm persistent regime",
+      "top1_token": 6,
+      "top1_regime_name": "calm persistent regime",
+      "top1_correct": true,
+      "topk_correct": true,
+      "actual_rank": 1.0,
+      "reciprocal_rank": 1.0,
+      "support": 484,
+      "support_is_sufficient": true,
+      "transition_source": "suffix_2_tokens",
+      "candidate_tokens": [
+        6,
+        1,
+        2
+      ]
+    },
+    {
+      "case_index": 9,
+      "source_window_id": "live_KBOS_202605211954_202605220054",
+      "actual_window_id": "live_KBOS_202605212054_202605220154",
+      "sequence": [
+        4,
+        6,
+        6,
+        6
+      ],
+      "actual_token": 6,
+      "actual_regime_name": "calm persistent regime",
+      "top1_token": 6,
+      "top1_regime_name": "calm persistent regime",
+      "top1_correct": true,
+      "topk_correct": true,
+      "actual_rank": 1.0,
+      "reciprocal_rank": 1.0,
+      "support": 340,
+      "support_is_sufficient": true,
+      "transition_source": "suffix_3_tokens",
+      "candidate_tokens": [
+        6,
+        1,
+        2
+      ]
+    },
+    {
+      "case_index": 10,
+      "source_window_id": "live_KBOS_202605212054_202605220154",
+      "actual_window_id": "live_KBOS_202605212154_202605220254",
+      "sequence": [
+        6,
+        6,
+        6,
+        6
+      ],
+      "actual_token": 6,
+      "actual_regime_name": "calm persistent regime",
+      "top1_token": 6,
+      "top1_regime_name": "calm persistent regime",
+      "top1_correct": true,
+      "topk_correct": true,
+      "actual_rank": 1.0,
+      "reciprocal_rank": 1.0,
+      "support": 228,
+      "support_is_sufficient": true,
+      "transition_source": "exact_sequence",
+      "candidate_tokens": [
+        6,
+        1,
+        2
+      ]
+    },
+    {
+      "case_index": 11,
+      "source_window_id": "live_KBOS_202605212154_202605220254",
+      "actual_window_id": "live_KBOS_202605212254_202605220354",
+      "sequence": [
+        6,
+        6,
+        6,
+        6
+      ],
+      "actual_token": 6,
+      "actual_regime_name": "calm persistent regime",
+      "top1_token": 6,
+      "top1_regime_name": "calm persistent regime",
+      "top1_correct": true,
+      "topk_correct": true,
+      "actual_rank": 1.0,
+      "reciprocal_rank": 1.0,
+      "support": 228,
+      "support_is_sufficient": true,
+      "transition_source": "exact_sequence",
+      "candidate_tokens": [
+        6,
+        1,
+        2
+      ]
+    },
+    {
+      "case_index": 12,
+      "source_window_id": "live_KBOS_202605212254_202605220354",
+      "actual_window_id": "live_KBOS_202605212354_202605220454",
+      "sequence": [
+        6,
+        6,
+        6,
+        6
+      ],
+      "actual_token": 7,
+      "actual_regime_name": "moderate-flow gusty regime",
+      "top1_token": 6,
+      "top1_regime_name": "calm persistent regime",
+      "top1_correct": false,
+      "topk_correct": false,
+      "actual_rank": NaN,
+      "reciprocal_rank": 0.0,
+      "support": 228,
+      "support_is_sufficient": true,
+      "transition_source": "exact_sequence",
+      "candidate_tokens": [
+        6,
+        1,
+        2
+      ]
+    },
+    {
+      "case_index": 13,
+      "source_window_id": "live_KBOS_202605212354_202605220454",
+      "actual_window_id": "live_KBOS_202605220054_202605220554",
+      "sequence": [
+        6,
+        6,
+        6,
+        7
+      ],
+      "actual_token": 5,
+      "actual_regime_name": "moderate-flow stable gusty regime",
+      "top1_token": 7,
+      "top1_regime_name": "moderate-flow gusty regime",
+      "top1_correct": false,
+      "topk_correct": true,
+      "actual_rank": 3.0,
+      "reciprocal_rank": 0.3333333333333333,
+      "support": 747,
+      "support_is_sufficient": true,
+      "transition_source": "last_token_markov",
+      "candidate_tokens": [
+        7,
+        0,
+        5
+      ]
+    },
+    {
+      "case_index": 14,
+      "source_window_id": "live_KBOS_202605220054_202605220554",
+      "actual_window_id": "live_KBOS_202605220154_202605220654",
+      "sequence": [
+        6,
+        6,
+        7,
+        5
+      ],
+      "actual_token": 5,
+      "actual_regime_name": "moderate-flow stable gusty regime",
+      "top1_token": 5,
+      "top1_regime_name": "moderate-flow stable gusty regime",
+      "top1_correct": true,
+      "topk_correct": true,
+      "actual_rank": 1.0,
+      "reciprocal_rank": 1.0,
+      "support": 70,
+      "support_is_sufficient": true,
+      "transition_source": "suffix_2_tokens",
+      "candidate_tokens": [
+        5,
+        0,
+        1
+      ]
+    },
+    {
+      "case_index": 15,
+      "source_window_id": "live_KBOS_202605220154_202605220654",
+      "actual_window_id": "live_KBOS_202605220254_202605220754",
+      "sequence": [
+        6,
+        7,
+        5,
+        5
+      ],
+      "actual_token": 5,
+      "actual_regime_name": "moderate-flow stable gusty regime",
+      "top1_token": 5,
+      "top1_regime_name": "moderate-flow stable gusty regime",
+      "top1_correct": true,
+      "topk_correct": true,
+      "actual_rank": 1.0,
+      "reciprocal_rank": 1.0,
+      "support": 65,
+      "support_is_sufficient": true,
+      "transition_source": "suffix_3_tokens",
+      "candidate_tokens": [
+        5,
+        0,
+        4
+      ]
+    }
+  ]
+}

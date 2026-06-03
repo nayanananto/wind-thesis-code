@@ -1,0 +1,1 @@
+"""Wind thesis application package."""

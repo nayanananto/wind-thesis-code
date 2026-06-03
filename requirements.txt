@@ -1,0 +1,13 @@
+﻿fastapi
+uvicorn
+pydantic
+pandas
+numpy
+scikit-learn
+joblib
+tensorflow
+matplotlib
+langgraph
+openai
+faiss-cpu
+tqdm
