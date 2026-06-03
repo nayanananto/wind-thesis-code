@@ -1,57 +1,82 @@
-﻿# Wind Semantic Forecasting Thesis Codebase
+# Wind Semantic Forecasting Thesis Codebase
 
-This is the clean independent thesis codebase. It intentionally does not contain the old mixed wind_forecasting_app/ folder dump.
+Clean, independent codebase for the wind semantic forecasting thesis. It contains the final 5-minute NOAA benchmark, semantic compression artifacts, phase-prediction experiments, and the controlled HITL review interface.
 
-## What this repository contains
+## Repository Contents
 
-- pp/: thesis-relevant Python modules only.
-  - semantic compression and tokenization
-  - semantic retrieval
-  - phase forecasting
-  - controlled HITL/agentic review pipeline
-  - LLM-backed memory follow-up utilities
-- scripts/: runnable HITL and semantic workflow scripts.
-- 	heory_experiments/: offline experiments for:
-  - raw LSTM wind-speed forecasting
-  - PCA/statistical-compressed LSTM forecasting
-  - LSTM-compressed LSTM forecasting
-  - transition-count phase prediction
-  - GRU phase-prediction tuning/evaluation
-- data/: minimal wind, semantic-state, metadata, and live-state files needed by the thesis code.
-- rtifacts/: minimal encoder, tokenizer, search-index, and optional HITL GRU artifacts.
-- esults/: saved experiment result tables and reports.
+- `app/` - thesis-relevant Python modules for preprocessing, semantic compression, retrieval, HITL routing, memory follow-up, and review feedback.
+- `scripts/` - runnable scripts for the HITL UI and live-data workflow.
+- `theory_experiments/` - offline experiment scripts for numeric forecasting, semantic phase prediction, GRU phase prediction, and compression metrics.
+- `data/noaa_5min/` - final NOAA 5-minute KBOS dataset used by the benchmark.
+- `data/semantic/` - 5-minute semantic states, embeddings, regime profiles, and supporting files.
+- `artifacts/` - saved encoder/tokenizer/search-index/model artifacts needed by the pipeline.
+- `results/5min_two_seed_experiments/` - final two-seed result tables and compression metrics used for thesis writing.
 
-## Thesis framing
+## Final Experimental Setup
 
-The thesis compares raw wind-speed forecasting with compressed semantic forecasting, then uses the semantic representation in a human-in-the-loop review layer. The main offline evaluation studies how raw LSTM, PCA/statistical compression, learned LSTM compression, transition-count phase prediction, and GRU phase prediction behave across horizons.
+The final benchmark uses NOAA 5-minute KBOS observations, not the older hourly setup.
 
-The HITL layer is a controlled agentic workflow, not a fully autonomous multi-agent system. Specialized nodes handle phase prediction, current-state explanation, retrieval of similar historical windows, memory-grounded follow-up, and human feedback logging.
+- Seeds: `42`, `123`
+- Numeric horizons: `1h`, `3h`, `6h`, `12h`
+- Five-minute horizon steps: `12`, `36`, `72`, `144`
+- Numeric methods: raw LSTM, PCA-compressed LSTM, LSTM-compressed LSTM
+- Phase methods: transition-count predictor and GRU phase predictor
+- HITL deployment path: transition-count predictor with evidence, historical analogs, memory/RAG follow-up, and review feedback
 
-## Main commands
+## Final Output Files
+
+Use these files when writing tables/figures:
+
+- `results/5min_two_seed_experiments/numeric_5min_two_seed_final_results.csv`
+- `results/5min_two_seed_experiments/numeric_5min_two_seed_summary.csv`
+- `results/5min_two_seed_experiments/phase_transition_5min_two_seed_final_results.csv`
+- `results/5min_two_seed_experiments/phase_transition_5min_two_seed_summary.csv`
+- `results/5min_two_seed_experiments/gru_phase_5min_two_seed_final_results.csv`
+- `results/5min_two_seed_experiments/gru_phase_5min_two_seed_summary.csv`
+- `results/5min_two_seed_experiments/compression_metrics_5min.csv`
+- `results/5min_two_seed_experiments/compression_metrics_5min_summary.json`
+- `results/5min_two_seed_experiments/5min_two_seed_manifest.json`
+
+## Main Commands
 
 Install dependencies:
 
-`powershell
+```powershell
 pip install -r requirements.txt
-`
+```
 
-Run theory experiments:
+Run the final two-seed 5-minute benchmark:
 
-`powershell
-python theory_experiments\run_wind_compression_experiments.py
-python theory_experiments\run_phase_transition_experiments.py
-python theory_experiments\temp_gru_phase_roi.py
-`
+```powershell
+python theory_experimentsun_5min_two_seed_final_experiments.py
+```
+
+Compute compression metrics:
+
+```powershell
+python theory_experiments\compute_compression_metrics.py
+```
 
 Run the HITL UI:
 
-`powershell
+```powershell
 $env:SEMANTIC_LLM_MODEL="gpt-4o-mini"
-python scripts\run_hitl_ui.py
-`
+python scriptsun_hitl_ui.py
+```
+
+Open the browser URL printed by the server. The UI uses fixed thesis defaults: LLM follow-up on, memory/RAG on, live 5-minute state on, transition predictor, top-3 phase candidates, and five historical analogs.
+
+## Result Interpretation Notes
+
+- Raw LSTM is the strongest direct numeric forecaster on the final 5-minute benchmark.
+- PCA-compressed LSTM is the stronger compressed numeric variant.
+- Semantic compression should be framed as an interpretability/reviewability layer, not as a universal numeric-accuracy improvement.
+- GRU is the strongest phase predictor offline.
+- Transition-count remains the deployment/HITL predictor because it returns inspectable support counts and historical analogs.
+- Compression metrics: 144 raw scalar values per 4-hour window become a 36-dimensional physical summary, then an 8-dimensional PCA embedding, and finally one of 8 regime tokens.
 
 ## Notes
 
-- API keys are not included. Set OPENAI_API_KEY in your environment if using LLM-backed follow-up.
-- Runtime logs, virtual environments, cache folders, and unrelated old project files are excluded.
-- The active HITL phase prediction defaults to transition-count evidence because it is inspectable by human reviewers; GRU is included as the stronger offline neural baseline.
+- API keys are not included. Set `OPENAI_API_KEY` only if LLM-backed follow-up is needed.
+- Runtime logs, virtual environments, cache folders, and feedback logs are excluded.
+- The older hourly benchmark is not the final benchmark and should only be treated as background/ablation material.

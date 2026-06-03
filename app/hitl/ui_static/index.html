@@ -3,99 +3,76 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>HITL Wind Review</title>
+    <title>Wind Phase Review Lab</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <main class="shell">
-      <section class="side">
-        <div class="brand">
-          <span class="mark"></span>
+      <aside class="side">
+        <section class="hero-card">
+          <div class="brand">
+            <span class="mark" aria-hidden="true"></span>
+            <div>
+              <p class="eyebrow">Semantic Wind Thesis</p>
+              <h1>Phase Review Lab</h1>
+            </div>
+          </div>
+          <p class="hero-copy">
+            Inspect live compressed wind states, forecast semantic phases, retrieve historical analogs,
+            and record human review feedback.
+          </p>
+          <div id="metadataStatus" class="status-chip">Loading live context...</div>
+        </section>
+
+        <section class="control-card">
+          <p class="panel-title">Core Actions</p>
+          <div class="quick">
+            <button data-prompt="predict next phase">Predict Phase</button>
+            <button data-prompt="explain current live state">Explain State</button>
+            <button data-prompt="retrieve similar historical windows">Similar Windows</button>
+            <button data-prompt="why was this phase selected?">Why This Phase?</button>
+            <button data-prompt="flag this prediction because support should be reviewed">Flag Forecast</button>
+            <button data-prompt="what is the review status?">Review Status</button>
+          </div>
+        </section>
+
+        <section class="control-card protocol-card">
+          <p class="panel-title">Active Protocol</p>
+          <div class="protocol-list" aria-label="Fixed HITL configuration">
+            <span class="protocol-badge">LLM follow-up on</span>
+            <span class="protocol-badge">Memory/RAG on</span>
+            <span class="protocol-badge">Live state on</span>
+            <span class="protocol-badge">Transition predictor</span>
+          </div>
+          <p class="protocol-note">
+            The review workflow now runs with fixed thesis defaults: latest 5-minute live state,
+            top-3 phase candidates, five historical analogs, and persistent review memory.
+          </p>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
           <div>
-            <h1>HITL Wind Review</h1>
-            <p id="metadataStatus">Loading metadata...</p>
+            <p class="eyebrow">Human-in-the-loop semantic forecasting</p>
+            <h2>Live KBOS Wind State Review</h2>
           </div>
-        </div>
-
-        <label>Metadata <input id="metadata" type="text" spellcheck="false" /></label>
-
-        <div class="grid2">
-          <label>Window ID <input id="windowId" type="text" placeholder="latest" /></label>
-          <label>Top K <input id="topK" type="number" min="1" max="20" value="5" /></label>
-        </div>
-
-        <div class="window-tools">
-          <div class="grid2">
-            <label>Token Filter <input id="tokenFilter" type="number" min="0" placeholder="any" /></label>
-            <label>Recent Count <input id="windowLimit" type="number" min="5" max="200" value="30" /></label>
+          <div class="topbar-meta">
+            <span>Transition evidence</span>
+            <span>Historical analogs</span>
+            <span>Reviewer memory</span>
           </div>
-          <button id="loadWindows" type="button">Load Windows</button>
-          <select id="windowSelect" size="8" aria-label="Recent semantic windows"></select>
-        </div>
+        </header>
 
-        <div class="grid2">
-            <label>Phase History <input id="phaseHistory" type="number" min="1" max="12" value="3" /></label>
-          <label>Phase Step <input id="phaseStep" type="number" min="1" max="48" value="1" /></label>
-        </div>
+        <section id="messages" class="messages" aria-live="polite"></section>
 
-        <div class="grid2">
-          <label>Phase Top K <input id="phaseTopK" type="number" min="1" max="10" value="3" /></label>
-          <label>Analogs <input id="phaseAnalogK" type="number" min="1" max="20" value="5" /></label>
-        </div>
-
-        <div class="grid2">
-          <label>Min Support <input id="phaseMinSupport" type="number" min="1" max="100" value="5" /></label>
-        </div>
-
-        <label>Live History <input id="livePhaseHistory" type="text" spellcheck="false" /></label>
-        <label>Live State <input id="livePhaseState" type="text" spellcheck="false" /></label>
-        <label>Live Raw CSV <input id="liveRawPath" type="text" spellcheck="false" /></label>
-
-        <div class="grid2" hidden>
-          <label>Numeric Steps <input id="numericSteps" type="number" min="1" max="12" value="6" /></label>
-          <label>Numeric Mode
-            <select id="numericMode">
-              <option value="auto">auto</option>
-              <option value="lstm">lstm</option>
-              <option value="trend">trend</option>
-            </select>
-          </label>
-        </div>
-
-        <label hidden>Numeric Model <input id="numericModelPath" type="text" spellcheck="false" /></label>
-
-        <div class="grid2">
-          <label>Phase Model
-            <select id="phaseModelMode">
-              <option value="auto">auto</option>
-              <option value="gru">gru</option>
-              <option value="transition">transition</option>
-            </select>
-          </label>
-          <label>Phase Artifact <input id="phaseModelPath" type="text" spellcheck="false" /></label>
-        </div>
-
-        <div class="toggles">
-          <label class="check"><input id="enableRag" type="checkbox" checked /> RAG</label>
-          <label class="check"><input id="enableLlm" type="checkbox" /> LLM</label>
-          <label class="check"><input id="enableAgentGraph" type="checkbox" checked /> LangGraph</label>
-          <label class="check"><input id="preferLivePhase" type="checkbox" checked /> Live phase</label>
-        </div>
-
-        <div class="quick">
-          <button data-prompt="Explain this compressed wind state">State</button>
-          <button data-prompt="Have we seen similar past wind regimes before?">Similar</button>
-          <button data-prompt="Predict the next phase from the real time wind windows">Live Phase</button>
-          <button data-prompt="Explain why the predicted phase was selected">Phase Why</button>
-          <button data-prompt="Flag this explanation as needing review">Flag</button>
-        </div>
-      </section>
-
-      <section class="chat">
-        <div id="messages" class="messages"></div>
         <form id="chatForm" class="composer">
-          <textarea id="question" rows="2" placeholder="Ask about selected state, similar regimes, phase prediction, or feedback"></textarea>
-          <button type="submit">Send</button>
+          <textarea
+            id="question"
+            rows="2"
+            placeholder="Ask: predict next phase, explain current live state, retrieve similar windows, or flag this prediction"
+          ></textarea>
+          <button type="submit">Run</button>
         </form>
       </section>
     </main>

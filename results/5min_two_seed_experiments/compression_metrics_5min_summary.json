@@ -1,0 +1,44 @@
+{
+  "data_interval": "5min",
+  "n_raw_rows": 92021,
+  "n_semantic_windows": 7665,
+  "window_size_samples": 48,
+  "window_step_samples": 12,
+  "raw_channels_counted": [
+    "wind_speed",
+    "wind_gust_10m_ms",
+    "wind_direction"
+  ],
+  "raw_window_dim": 144,
+  "engineered_feature_dim": 36,
+  "embedding_dim": 8,
+  "n_tokens": 8,
+  "token_bits_minimum": 3,
+  "pca_explained_variance_ratio": [
+    0.28449232427187643,
+    0.1731884834256578,
+    0.07135387359554489,
+    0.06237554107535501,
+    0.051258288240218206,
+    0.036582500814901206,
+    0.03284370536224479,
+    0.03102817817043102
+  ],
+  "pca_total_explained_variance": 0.7431228949562293,
+  "estimated_float32_bytes_per_window": {
+    "raw_window": 576,
+    "engineered_features": 144,
+    "pca_embedding": 32,
+    "token_id_minimum_bits": 3
+  },
+  "estimated_float32_storage_ratios": {
+    "raw_to_features": 4.0,
+    "raw_to_embedding": 18.0
+  },
+  "temporal_compression": {
+    "samples_per_token_window": 48,
+    "sample_cadence_minutes": 5,
+    "token_step_samples": 12,
+    "token_step_minutes": 60
+  }
+}

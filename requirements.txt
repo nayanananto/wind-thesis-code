@@ -11,3 +11,4 @@ langgraph
 openai
 faiss-cpu
 tqdm
+pyarrow

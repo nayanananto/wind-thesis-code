@@ -1,17 +1,27 @@
-﻿{
-    "created_at":  "2026-06-03T07:06:16.1019042+06:00",
-    "destination":  "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614",
-    "file_count":  117,
-    "directory_count":  38,
-    "size_mb":  36.63,
-    "excluded":  [
-                     "old wind_forecasting_app folder dump",
-                     "archived package dump",
-                     "recSys/nf1 unrelated files",
-                     ".git",
-                     ".env",
-                     "venv",
-                     "logs",
-                     "cache"
-                 ]
+{
+  "updated_at": "2026-06-03T20:45:17",
+  "canonical_repo": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo",
+  "final_benchmark": "NOAA KBOS 5-minute, two seeds, horizons 1h/3h/6h/12h",
+  "file_count_excluding_pycache": 127,
+  "size_mb_excluding_pycache": 38.33,
+  "included": [
+    "app",
+    "artifacts",
+    "data",
+    "results",
+    "scripts",
+    "theory_experiments",
+    "README.md",
+    "requirements.txt",
+    "CLEAN_MANIFEST.json"
+  ],
+  "excluded": [
+    "old mixed wind_forecasting_app folder dump",
+    ".env",
+    "venv/.venv",
+    "logs",
+    "cache",
+    "feedback/session logs"
+  ],
+  "final_results_dir": "results/5min_two_seed_experiments"
 }

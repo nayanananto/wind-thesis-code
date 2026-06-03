@@ -2,23 +2,28 @@ const $ = (id) => document.getElementById(id);
 const messages = $("messages");
 const sessionKey = "hitl_thread_id";
 let threadId = sessionStorage.getItem(sessionKey);
+let runtimeDefaults = {};
+let selectedWindowId = null;
+
+const FIXED_CONFIG = {
+  topK: 5,
+  enableLlm: true,
+  enableAgentGraph: true,
+  enableRag: true,
+  preferLivePhase: true,
+  phaseHistory: 3,
+  phaseStep: 1,
+  phaseTopK: 3,
+  phaseAnalogK: 5,
+  phaseMinSupport: 5,
+  phaseModelMode: "transition",
+  numericSteps: 6,
+  numericMode: "auto",
+};
+
 if (!threadId) {
   threadId = `hitl_${crypto.randomUUID()}`;
   sessionStorage.setItem(sessionKey, threadId);
-}
-
-function parseTokens(value) {
-  const clean = value.trim();
-  if (!clean) return null;
-  const tokens = clean
-    .replace("[", "")
-    .replace("]", "")
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => Number.parseInt(part, 10))
-    .filter(Number.isFinite);
-  return tokens.length ? tokens : null;
 }
 
 function esc(value) {
@@ -41,140 +46,161 @@ function addMessage(role, html) {
   return node;
 }
 
+function pill(text, className = "") {
+  return `<span class="pill ${className}">${esc(text)}</span>`;
+}
+
 function renderRows(title, rows, type) {
   if (!rows || rows.length === 0) return "";
   const body = rows
     .map((row) => {
       if (type === "candidate") {
-        return `<div class="row"><strong>Token ${esc(row.token_id)}</strong><span>${esc(row.regime_name)}</span><span>${esc(row.probability)}</span><span>n=${esc(row.count)}</span></div>`;
+        const prob = typeof row.probability === "number" ? row.probability.toFixed(3) : row.probability;
+        return `<div class="row"><strong>Token ${esc(row.token_id)}</strong><span>${esc(row.regime_name)}</span><span>p=${esc(prob)}</span><span>n=${esc(row.count)}</span></div>`;
       }
       if (type === "analog") {
-        return `<div class="row"><strong>${esc(row.evidence_id)}</strong><span>${esc(row.history_tokens)}</span><span>Next ${esc(row.next_token_id)}</span><span>${esc(row.future_window_start)}</span></div>`;
+        return `<div class="row"><strong>${esc(row.evidence_id)}</strong><span>${esc(row.history_tokens)}</span><span>next ${esc(row.next_token_id)}</span><span>${esc(row.future_window_start)}</span></div>`;
       }
-      if (type === "numeric") {
-        return `<div class="row"><strong>Step ${esc(row.step)}</strong><span>${esc(row.datetime)}</span><span>${esc(row.wind_speed)} m/s</span><span>${esc(row.lower)}-${esc(row.upper)}</span></div>`;
-      }
-      const dist = typeof row.retrieval_distance === "number" ? row.retrieval_distance.toFixed(3) : row.retrieval_distance;
-      return `<div class="row"><strong>${esc(row.window_id)}</strong><span>${esc(row.regime_name)}</span><span>${esc(dist)}</span><button type="button" class="use-window" data-window="${esc(row.window_id)}">Use</button></div>`;
+      const dist = typeof row.retrieval_distance === "number" ? row.retrieval_distance.toFixed(4) : row.retrieval_distance;
+      return `<div class="row"><strong>${esc(row.window_id)}</strong><span>${esc(row.regime_name)}</span><span>d=${esc(dist)}</span><button type="button" class="use-window" data-window="${esc(row.window_id)}">Use</button></div>`;
     })
     .join("");
-  return `<div class="section"><h2>${esc(title)}</h2><div class="rows">${body}</div></div>`;
+  return `<div class="section"><h3>${esc(title)}</h3><div class="rows">${body}</div></div>`;
 }
 
-function renderResponse(payload) {
-  const s = payload.summary || {};
+function renderReviewState(reviewState) {
+  if (!reviewState) return "";
   const meta = [
+    pill(`status: ${reviewState.status || reviewState.action || "n/a"}`, "strong"),
+    reviewState.model_predicted_token !== null && reviewState.model_predicted_token !== undefined
+      ? pill(`model next token: ${reviewState.model_predicted_token}`)
+      : null,
+    reviewState.human_preferred_token !== null && reviewState.human_preferred_token !== undefined
+      ? pill(`human token: ${reviewState.human_preferred_token}`)
+      : null,
+  ].filter(Boolean).join("");
+
+  return `<div class="section">
+    <h3>Human Review State</h3>
+    <div class="meta">${meta}</div>
+    ${reviewState.note ? `<div class="answer">${esc(reviewState.note)}</div>` : ""}
+  </div>`;
+}
+
+function renderMemoryDebug(debug) {
+  if (!debug) return "";
+  const chunks = (debug.selected_chunk_ids || []).join(", ");
+  const kinds = (debug.selected_chunk_kinds || []).map((item) => pill(item)).join("");
+  const blockers = (debug.llm_blockers || []).join(", ");
+  return `<details class="details-box">
+    <summary>Technical memory/RAG trace</summary>
+    <div class="details-body">
+      <div class="meta">
+        ${pill(`LLM attempted: ${Boolean(debug.llm_attempted)}`)}
+        ${pill(`LLM used: ${Boolean(debug.llm_used)}`)}
+        ${debug.llm_output_format ? pill(`format: ${debug.llm_output_format}`) : ""}
+      </div>
+      ${kinds ? `<div class="meta">${kinds}</div>` : ""}
+      ${chunks ? `<div class="answer">Chunks: ${esc(chunks)}</div>` : ""}
+      ${blockers ? `<div class="answer">LLM blockers: ${esc(blockers)}</div>` : ""}
+      ${debug.llm_fallback_reason ? `<div class="answer">Fallback: ${esc(debug.llm_fallback_reason)}</div>` : ""}
+    </div>
+  </details>`;
+}
+
+function renderTechnicalDetails(s) {
+  const details = [
     `intent: ${s.intent ?? "n/a"}`,
     `confidence: ${s.confidence ?? "n/a"}`,
     `mode: ${s.mode ?? "n/a"}`,
     s.retrieval_context ? `retrieval: ${s.retrieval_context}` : null,
     s.explanation_context ? `explain context: ${s.explanation_context}` : null,
-    s.explanation_mode ? `explain: ${s.explanation_mode}` : null,
-    s.forecast_model_source ? `model: ${s.forecast_model_source}` : null,
-    s.model_warning ? `warning: ${s.model_warning}` : null,
-    `llm: ${s.llm_requested ? (s.llm_available ? "available" : "unavailable") : "off"}`,
-    `window: ${s.window_id ?? "n/a"}`,
+    s.explanation_mode ? `explain mode: ${s.explanation_mode}` : null,
     s.phase_transition_source ? `phase source: ${s.phase_transition_source}` : null,
+    s.forecast_model_source ? `model: ${s.forecast_model_source}` : null,
     s.agent_graph ? `agent: ${s.agent_graph.engine}/${s.agent_graph.route}` : null,
     s.router && s.router.source ? `router: ${s.router.source}` : null,
     s.thread_id ? `thread: ${s.thread_id}` : null,
-  ]
-    .filter(Boolean)
-    .map((item) => `<span class="pill">${esc(item)}</span>`)
-    .join("");
+    s.model_warning ? `warning: ${s.model_warning}` : null,
+  ].filter(Boolean);
+
+  if (!details.length) return "";
+  return `<details class="details-box">
+    <summary>Run details</summary>
+    <div class="details-body"><div class="meta">${details.map((item) => pill(item)).join("")}</div></div>
+  </details>`;
+}
+
+function renderResponse(payload) {
+  const s = payload.summary || {};
   const liveState = s.current_live_state || {};
-  const liveInfo = s.live_token_sequence
-    ? `<div class="meta"><span class="pill">live tokens: ${esc(s.live_token_sequence.join(", "))}</span><span class="pill">live state: ${esc(liveState.window_id || "n/a")}</span><span class="pill">live regime: ${esc(liveState.regime_name || "n/a")}</span></div>`
-    : "";
-  const criticWarnings = s.critic_warnings && s.critic_warnings.length
-    ? `<div class="meta">${s.critic_warnings.map((item) => `<span class="pill warning">${esc(item)}</span>`).join("")}</div>`
-    : "";
-  const memoryDebug = s.memory_rag_debug
-    ? `<div class="section">
-        <h2>Memory RAG Debug</h2>
-        <div class="meta">
-          <span class="pill">LLM attempted: ${esc(String(Boolean(s.memory_rag_debug.llm_attempted)))}</span>
-          <span class="pill">LLM used: ${esc(String(Boolean(s.memory_rag_debug.llm_used)))}</span>
-          ${s.memory_rag_debug.llm_output_format ? `<span class="pill">format: ${esc(s.memory_rag_debug.llm_output_format)}</span>` : ""}
-        </div>
-        ${(s.memory_rag_debug.llm_blockers || []).length
-          ? `<div class="answer">LLM blockers: ${esc((s.memory_rag_debug.llm_blockers || []).join(", "))}</div>`
-          : ""}
-        <div class="meta">
-          ${(s.memory_rag_debug.selected_chunk_kinds || []).map((item) => `<span class="pill">${esc(item)}</span>`).join("")}
-        </div>
-        ${(s.memory_rag_debug.selected_chunk_ids || []).length
-          ? `<div class="answer">Chunks: ${esc((s.memory_rag_debug.selected_chunk_ids || []).join(", "))}</div>`
-          : ""}
-        ${s.memory_rag_debug.llm_fallback_reason
-          ? `<div class="answer">Fallback: ${esc(s.memory_rag_debug.llm_fallback_reason)}</div>`
-          : ""}
-      </div>`
-    : "";
-  const reviewState = s.review_state
-    ? `<div class="section">
-        <h2>Review State</h2>
-        <div class="meta">
-          <span class="pill">status: ${esc(s.review_state.status || s.review_state.action || "n/a")}</span>
-          ${s.review_state.model_predicted_token !== null && s.review_state.model_predicted_token !== undefined
-            ? `<span class="pill">model next token: ${esc(s.review_state.model_predicted_token)}</span>`
-            : ""}
-          ${s.review_state.human_preferred_token !== null && s.review_state.human_preferred_token !== undefined
-            ? `<span class="pill">human token: ${esc(s.review_state.human_preferred_token)}</span>`
-            : ""}
-        </div>
-        ${s.review_state.note ? `<div class="answer">${esc(s.review_state.note)}</div>` : ""}
-      </div>`
-    : "";
+  const route = s.agent_graph ? `${s.agent_graph.route}` : (s.intent || "hitl");
+  const primaryMeta = [
+    pill(`route: ${route}`, "strong"),
+    s.window_id ? pill(`window: ${s.window_id}`) : null,
+    s.live_token_sequence ? pill(`live tokens: ${s.live_token_sequence.join(", ")}`) : null,
+    liveState.regime_name ? pill(`live regime: ${liveState.regime_name}`) : null,
+    s.llm_requested ? pill(`LLM: ${s.llm_available ? "available" : "unavailable"}`) : pill("LLM: off"),
+  ].filter(Boolean).join("");
+
+  const warnings = [
+    ...(s.critic_warnings || []),
+    s.phase_low_support ? `low support: n=${s.phase_support}` : null,
+    s.model_warning || null,
+  ].filter(Boolean);
 
   return `
-    <div class="meta">${meta}</div>
-    ${liveInfo}
-    ${criticWarnings}
-    ${s.phase_low_support ? `<div class="meta"><span class="pill warning">low support: n=${esc(s.phase_support)}</span></div>` : ""}
+    <div class="meta">${primaryMeta}</div>
+    ${warnings.length ? `<div class="meta">${warnings.map((item) => pill(item, "warning")).join("")}</div>` : ""}
     <div class="answer">${esc(s.answer || "No answer returned.")}</div>
     ${renderRows("Phase candidates", s.top_phase_candidates, "candidate")}
+    ${renderRows("Similar historical windows", s.similar_windows, "similar")}
     ${renderRows("Transition analogs", s.transition_analogs, "analog")}
-    ${renderRows("Similar windows for selected query state", s.similar_windows, "similar")}
-    ${reviewState}
-    ${memoryDebug}
-    ${s.human_review_prompt ? `<div class="section"><h2>Review</h2><div class="answer">${esc(s.human_review_prompt)}</div></div>` : ""}
+    ${renderReviewState(s.review_state)}
+    ${s.human_review_prompt ? `<div class="section"><h3>Reviewer prompt</h3><div class="answer">${esc(s.human_review_prompt)}</div></div>` : ""}
+    ${renderMemoryDebug(s.memory_rag_debug)}
+    ${renderTechnicalDetails(s)}
   `;
+}
+
+function requestBody(question) {
+  const cfg = { ...FIXED_CONFIG, ...runtimeDefaults };
+  return {
+    question,
+    thread_id: threadId,
+    metadata: cfg.metadata || null,
+    window_id: selectedWindowId,
+    latest: !selectedWindowId,
+    top_k: cfg.topK,
+    enable_llm: cfg.enableLlm,
+    enable_agent_graph: cfg.enableAgentGraph,
+    enable_rag: cfg.enableRag,
+    phase_tokens: null,
+    phase_history_length: cfg.phaseHistory,
+    phase_horizon_steps: cfg.phaseStep,
+    phase_top_k: cfg.phaseTopK,
+    phase_analog_k: cfg.phaseAnalogK,
+    phase_min_support: cfg.phaseMinSupport,
+    live_raw_path: cfg.live_raw_path || null,
+    numeric_forecast_steps: cfg.numericSteps,
+    numeric_forecast_mode: cfg.numericMode,
+    numeric_model_path: cfg.numeric_model_path || null,
+    phase_model_mode: cfg.phaseModelMode,
+    phase_model_path: cfg.phase_model_path || null,
+    live_phase_history_path: cfg.live_phase_history_path || null,
+    live_phase_state_path: cfg.live_phase_state_path || null,
+    prefer_live_phase: cfg.preferLivePhase,
+  };
 }
 
 async function send(question) {
   addMessage("user", `<div class="answer">${esc(question)}</div>`);
-  const pending = addMessage("assistant", `<div class="answer">Running HITL pipeline...</div>`);
+  const pending = addMessage("assistant", `<div class="answer">Running semantic review workflow...</div>`);
 
   const response = await fetch("/api/hitl", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      question,
-      thread_id: threadId,
-      metadata: $("metadata").value,
-      window_id: $("windowId").value || null,
-      latest: !$("windowId").value,
-      top_k: Number.parseInt($("topK").value, 10),
-      enable_llm: $("enableLlm").checked,
-      enable_agent_graph: $("enableAgentGraph").checked,
-      enable_rag: $("enableRag").checked,
-      phase_tokens: null,
-      phase_history_length: Number.parseInt($("phaseHistory").value, 10),
-      phase_horizon_steps: Number.parseInt($("phaseStep").value, 10),
-      phase_top_k: Number.parseInt($("phaseTopK").value, 10),
-      phase_analog_k: Number.parseInt($("phaseAnalogK").value, 10),
-      phase_min_support: Number.parseInt($("phaseMinSupport").value, 10),
-      live_raw_path: $("liveRawPath").value || null,
-      numeric_forecast_steps: Number.parseInt($("numericSteps").value, 10),
-      numeric_forecast_mode: $("numericMode").value,
-      numeric_model_path: $("numericModelPath").value || null,
-      phase_model_mode: $("phaseModelMode").value,
-      phase_model_path: $("phaseModelPath").value || null,
-      live_phase_history_path: $("livePhaseHistory").value || null,
-      live_phase_state_path: $("livePhaseState").value || null,
-      prefer_live_phase: $("preferLivePhase").checked,
-    }),
+    body: JSON.stringify(requestBody(question)),
   });
 
   if (!response.ok) {
@@ -186,36 +212,17 @@ async function send(question) {
   pending.innerHTML = renderResponse(await response.json());
 }
 
-async function init() {
-  const defaults = await fetch("/api/defaults").then((r) => r.json());
-  $("metadata").value = defaults.metadata;
-  $("livePhaseHistory").value = defaults.live_phase_history_path || "";
-  $("livePhaseState").value = defaults.live_phase_state_path || "";
-  $("liveRawPath").value = defaults.live_raw_path || "";
-  $("numericSteps").value = defaults.numeric_forecast_steps || 6;
-  $("numericMode").value = defaults.numeric_forecast_mode || "auto";
-  $("numericModelPath").value = defaults.numeric_model_path || "";
-  $("phaseModelMode").value = defaults.phase_model_mode || "auto";
-  $("phaseModelPath").value = defaults.phase_model_path || "";
-  const sync = defaults.live_sync || {};
-  const syncText = sync.attempted
-    ? `Live sync: ${sync.ok ? "updated" : "failed"}`
-    : `Live sync: ${sync.status || "not attempted"}`;
-  $("metadataStatus").textContent = `${defaults.metadata_exists ? "Metadata ready" : "Metadata missing"} | ${syncText}`;
-  await loadWindows();
-  const syncMessage = sync.message ? `<div class="meta"><span class="pill">${esc(sync.message)}</span></div>` : "";
-  addMessage("assistant", `<div class="answer">HITL review interface ready.</div>${syncMessage}`);
-}
-
 async function loadWindows() {
+  const select = $("windowSelect");
+  if (!select) return;
+
   const params = new URLSearchParams({
-    metadata: $("metadata").value,
-    limit: $("windowLimit").value || "30",
+    metadata: runtimeDefaults.metadata || "",
+    limit: $("windowLimit")?.value || "30",
   });
-  const tokenFilter = $("tokenFilter").value.trim();
+  const tokenFilter = $("tokenFilter")?.value?.trim();
   if (tokenFilter) params.set("token_id", tokenFilter);
 
-  const select = $("windowSelect");
   select.innerHTML = `<option>Loading windows...</option>`;
   const response = await fetch(`/api/windows?${params.toString()}`);
   if (!response.ok) {
@@ -234,12 +241,47 @@ async function loadWindows() {
   });
 }
 
+async function init() {
+  const defaults = await fetch("/api/defaults").then((r) => r.json());
+  runtimeDefaults = {
+    metadata: defaults.metadata,
+    live_phase_history_path: defaults.live_phase_history_path || null,
+    live_phase_state_path: defaults.live_phase_state_path || null,
+    live_raw_path: defaults.live_raw_path || null,
+    numericSteps: defaults.numeric_forecast_steps || FIXED_CONFIG.numericSteps,
+    numericMode: defaults.numeric_forecast_mode || FIXED_CONFIG.numericMode,
+    numeric_model_path: defaults.numeric_model_path || null,
+    phaseModelMode: "transition",
+    phase_model_path: defaults.phase_model_path || null,
+  };
+
+  const sync = defaults.live_sync || {};
+  const syncText = sync.attempted
+    ? `Live sync ${sync.ok ? "ready" : "needs review"}`
+    : `Live sync ${sync.status || "not run"}`;
+  $("metadataStatus").textContent = `${defaults.metadata_exists ? "Metadata ready" : "Metadata missing"} | ${syncText}`;
+
+  const syncMessage = sync.message ? `<div class="meta">${pill(sync.message)}</div>` : "";
+  addMessage("assistant", `
+    <div class="meta">${pill("workflow ready", "strong")}${pill("LLM follow-up on")}${pill("Memory/RAG on")}${pill("live 5-min state")}</div>
+    <div class="answer">Use the core action buttons or ask naturally. The interface now runs a fixed optimal HITL configuration, so no manual checkboxes or advanced path settings are required.</div>
+    ${syncMessage}
+  `);
+}
+
 $("chatForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const question = $("question").value.trim();
   if (!question) return;
   $("question").value = "";
   await send(question);
+});
+
+$("question").addEventListener("keydown", async (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    $("chatForm").requestSubmit();
+  }
 });
 
 document.querySelectorAll("[data-prompt]").forEach((button) => {
@@ -249,10 +291,10 @@ document.querySelectorAll("[data-prompt]").forEach((button) => {
   });
 });
 
-$("loadWindows").addEventListener("click", loadWindows);
-$("metadata").addEventListener("change", loadWindows);
-$("windowSelect").addEventListener("change", () => {
-  $("windowId").value = $("windowSelect").value;
+$("loadWindows")?.addEventListener("click", loadWindows);
+$("metadata")?.addEventListener("change", loadWindows);
+$("windowSelect")?.addEventListener("change", () => {
+  selectedWindowId = $("windowSelect").value || null;
 });
 
 messages.addEventListener("click", (event) => {
@@ -260,8 +302,8 @@ messages.addEventListener("click", (event) => {
   if (!(target instanceof HTMLElement)) return;
   const windowId = target.dataset.window;
   if (!windowId) return;
-  $("windowId").value = windowId;
-  addMessage("assistant", `<div class="answer">Selected query window: ${esc(windowId)}</div>`);
+  selectedWindowId = windowId;
+  addMessage("assistant", `<div class="answer">Selected historical query window: ${esc(windowId)}</div>`);
 });
 
 init().catch((error) => {
