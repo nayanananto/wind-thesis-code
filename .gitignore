@@ -7,3 +7,4 @@ logs/
 data/hitl_session_memory.json
 data/hitl_review_state_log.jsonl
 data/hitl/feedback_log.jsonl
+*.bak

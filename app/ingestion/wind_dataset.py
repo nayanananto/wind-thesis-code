@@ -3,7 +3,12 @@ from pathlib import Path
 import pandas as pd
 
 from app.config.paths import DATA_DIR
-from utils import fetch_wind_data, load_scada_data
+
+try:
+    from utils import fetch_wind_data, load_scada_data
+except ModuleNotFoundError:
+    fetch_wind_data = None
+    load_scada_data = None
 
 
 DEFAULT_REMOTE_WIND_URL = (
@@ -26,6 +31,11 @@ def load_runtime_wind_data(
     local_path: str | Path | None = None,
     hist_path: str | Path | None = None,
 ) -> pd.DataFrame:
+    if fetch_wind_data is None:
+        raise ModuleNotFoundError(
+            "fetch_wind_data is unavailable because utils.py is not included in this clean codebase. "
+            "Use load_local_wind_data for local CSV/parquet experiments."
+        )
     local_path = Path(local_path or DATA_DIR / "wind_data.csv")
     hist_path = Path(hist_path or DATA_DIR / "historical_wind.csv")
     return fetch_wind_data(
@@ -45,5 +55,9 @@ def load_local_wind_data(path: str | Path | None = None) -> pd.DataFrame:
 
 
 def load_scada_frame(path: str | Path | None = None) -> pd.DataFrame:
+    if load_scada_data is None:
+        raise ModuleNotFoundError(
+            "load_scada_data is unavailable because utils.py is not included in this clean codebase."
+        )
     path = Path(path or DATA_DIR / "scada_data.csv")
     return load_scada_data(str(path))
