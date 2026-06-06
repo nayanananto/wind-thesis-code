@@ -1,0 +1,32 @@
+{
+  "data_path": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\data\\noaa_5min\\KBOS_2024_5min.parquet",
+  "semantic_states_path": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\data\\semantic\\kbos_5min_phase_semantic_states.csv",
+  "seeds": [
+    42,
+    123
+  ],
+  "horizon_hours": [
+    1,
+    3,
+    6,
+    12
+  ],
+  "horizon_steps": {
+    "1": 12,
+    "3": 36,
+    "6": 72,
+    "12": 144
+  },
+  "numeric_train_days": 30,
+  "numeric_final_splits": 2,
+  "numeric_step_hours": 168,
+  "notes": [
+    "Numeric horizons are converted from hours to 5-minute steps.",
+    "Numeric forecasting uses prior best tuned configs and reruns final evaluation only.",
+    "Phase transition and GRU use the 5-minute-derived semantic state sequence."
+  ],
+  "label_sources": [
+    "llm_refined"
+  ],
+  "rerun_note": "KBOS rerun after LLM-assisted regime-label refinement. Regime names/explanations changed; token IDs, embeddings, and quantitative setup are unchanged."
+}

@@ -11,11 +11,15 @@ Clean, independent codebase for the wind semantic forecasting thesis. It contain
 - `data/semantic/` - 5-minute semantic states, embeddings, regime profiles, and supporting files.
 - `artifacts/` - saved encoder/tokenizer/search-index/model artifacts needed by the pipeline.
 - `results/5min_two_seed_experiments/` - primary KBOS two-seed result tables and compression metrics used for thesis writing.
+- `results/kbos_llm_label_5min_two_seed_experiments/` - KBOS rerun after LLM-assisted regime-label refinement.
 - `results/kama_5min_two_seed_experiments/` - second-station robustness result tables using the same two-seed protocol.
+- `results/kama_gradient_boosting_experiments/` - KAMA tabular gradient-boosting tests over raw and compressed representations.
 
 ## Final Experimental Setup
 
 The final offline theory benchmark uses NOAA/ASOS 5-minute observations, not the older hourly setup. The primary reported station is KBOS. A second station run is included as a robustness check under `results/kama_5min_two_seed_experiments/`. It uses the same fixed horizons, seeds, semantic compression setup, and tuned model configurations so the comparison tests whether the KBOS trends are station-specific.
+
+The current KBOS semantic labels have also been rerun through post-clustering LLM label refinement. This changes only the human-readable regime names/explanations; token IDs, embeddings, train/test splits, and quantitative evaluation remain non-LLM.
 
 The HITL/live demo is separate: it uses the live AviationWeather/METAR stream through a semantic-state adapter, so it should be described as a live METAR semantic review layer rather than as a 5-minute live benchmark.
 
@@ -40,6 +44,14 @@ Use these files when writing primary KBOS tables/figures:
 - `results/5min_two_seed_experiments/compression_metrics_5min_summary.json`
 - `results/5min_two_seed_experiments/5min_two_seed_manifest.json`
 
+Updated KBOS outputs after LLM-assisted regime-label refinement:
+
+- `results/kbos_llm_label_5min_two_seed_experiments/numeric_5min_two_seed_summary.csv`
+- `results/kbos_llm_label_5min_two_seed_experiments/phase_transition_5min_two_seed_summary.csv`
+- `results/kbos_llm_label_5min_two_seed_experiments/gru_phase_5min_two_seed_summary.csv`
+- `results/kbos_llm_label_5min_two_seed_experiments/compression_metrics_5min.csv`
+- `results/kbos_llm_label_5min_two_seed_experiments/compression_metrics_5min_summary.json`
+
 Use these files for the second-station robustness check:
 
 - `results/kama_5min_two_seed_experiments/numeric_5min_two_seed_summary.csv`
@@ -47,6 +59,13 @@ Use these files for the second-station robustness check:
 - `results/kama_5min_two_seed_experiments/gru_phase_5min_two_seed_summary.csv`
 - `results/kama_5min_two_seed_experiments/compression_metrics_5min.csv`
 - `results/kama_5min_two_seed_experiments/compression_metrics_5min_summary.json`
+
+Use these files for the KAMA gradient-boosting extension:
+
+- `results/kama_gradient_boosting_experiments/gb_summary.csv`
+- `results/kama_gradient_boosting_experiments/gb_best_configs.csv`
+- `results/kama_gradient_boosting_experiments/gb_final_results.csv`
+- `results/kama_gradient_boosting_experiments/gb_vs_existing_lstm_numeric_summary.csv`
 
 ## Main Commands
 
@@ -66,6 +85,13 @@ Compute primary compression metrics:
 
 ```powershell
 python theory_experiments\compute_compression_metrics.py
+```
+
+Run the KBOS rerun after LLM-assisted regime-label refinement:
+
+```powershell
+python theory_experiments\run_kbos_llm_label_two_seed_experiments.py
+python theory_experiments\compute_kbos_llm_label_compression_metrics.py
 ```
 
 Normalize an additional ASOS station CSV to the thesis schema:
@@ -95,6 +121,12 @@ python theory_experiments\run_kama_5min_two_seed_experiments.py
 python theory_experiments\compute_kama_compression_metrics.py
 ```
 
+Run the KAMA gradient-boosting extension:
+
+```powershell
+python theory_experiments\run_kama_gradient_boosting_experiments.py
+```
+
 Run the HITL UI:
 
 ```powershell
@@ -113,6 +145,7 @@ Open the browser URL printed by the server. The UI uses fixed thesis defaults: L
 - Transition-count remains the deployment/HITL predictor because it returns inspectable support counts and historical analogs.
 - Compression metrics: 144 raw scalar values per 4-hour window become a 36-dimensional physical summary, then an 8-dimensional PCA embedding, and finally one of 8 regime tokens.
 - The second-station run follows the same trend: raw LSTM remains strongest for exact numeric forecasting, PCA is the stronger compressed numeric variant, and GRU is the strongest offline phase predictor.
+- The KAMA gradient-boosting extension shows that compressed semantic features are more competitive when paired with a tabular nonlinear learner, especially at medium/long horizons.
 
 ## Notes
 

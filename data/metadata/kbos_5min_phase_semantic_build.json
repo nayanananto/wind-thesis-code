@@ -45,14 +45,14 @@
   ],
   "llm_labels_enabled": false,
   "output_paths": {
-    "features": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\data\\semantic\\kbos_5min_phase_window_features.csv",
-    "embeddings": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\data\\semantic\\kbos_5min_phase_embeddings.csv",
-    "token_summary": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\data\\semantic\\kbos_5min_phase_token_summary.csv",
-    "semantic_states": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\data\\semantic\\kbos_5min_phase_semantic_states.csv",
-    "cluster_profiles": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\data\\semantic\\kbos_5min_phase_cluster_profiles.csv",
-    "representative_examples": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\data\\semantic\\kbos_5min_phase_representative_examples.csv",
-    "encoder": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\artifacts\\semantic_encoder\\kbos_5min_phase_encoder.joblib",
-    "tokenizer": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\artifacts\\tokenizer\\kbos_5min_phase_tokenizer.joblib",
-    "search_index": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\artifacts\\semantic_index\\kbos_5min_phase_search_index.joblib"
+    "features": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\data\\semantic\\kbos_5min_phase_window_features.csv",
+    "embeddings": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\data\\semantic\\kbos_5min_phase_embeddings.csv",
+    "token_summary": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\data\\semantic\\kbos_5min_phase_token_summary.csv",
+    "semantic_states": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\data\\semantic\\kbos_5min_phase_semantic_states.csv",
+    "cluster_profiles": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\data\\semantic\\kbos_5min_phase_cluster_profiles.csv",
+    "representative_examples": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\data\\semantic\\kbos_5min_phase_representative_examples.csv",
+    "encoder": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\artifacts\\semantic_encoder\\kbos_5min_phase_encoder.joblib",
+    "tokenizer": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\artifacts\\tokenizer\\kbos_5min_phase_tokenizer.joblib",
+    "search_index": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\artifacts\\semantic_index\\kbos_5min_phase_search_index.joblib"
   }
 }

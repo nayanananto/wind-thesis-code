@@ -1,0 +1,6 @@
+stage,before_dim,after_dim,compression_ratio,reduction_percent,interpretation
+raw_window_to_engineered_features,144,36,4.0,75.0,Raw 5-minute samples are summarized into physical window descriptors.
+engineered_features_to_pca_embedding,36,8,4.5,77.77777777777779,Physical descriptors are compressed into the PCA semantic embedding.
+raw_window_to_pca_embedding,144,8,18.0,94.44444444444444,End-to-end numeric dimensional compression before clustering.
+raw_window_to_token_id,144,1,144.0,99.30555555555556,Each four-hour raw window is represented by one discrete regime token.
+raw_window_to_token_one_hot,144,8,18.0,94.44444444444444,Alternative fair comparison if a token is represented as an 8-way one-hot vector.
