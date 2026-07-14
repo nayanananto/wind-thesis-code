@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from test_ollama import infer_time_step, load_features, metrics, seasonal_persistence, set_reproducible  # noqa: E402
+from backtest_wind import infer_time_step, load_features, metrics, seasonal_persistence, set_reproducible  # noqa: E402
 
 
 DATA_PATH = ROOT / "data" / "noaa_5min" / "KBOS_2024_5min.parquet"
@@ -592,9 +592,9 @@ def main() -> None:
 
     manifest = {
         "algorithm": "HistGradientBoostingRegressor",
-        "data_path": str(DATA_PATH),
-        "semantic_states_path": str(STATES_PATH),
-        "output_dir": str(OUT),
+        "data_path": DATA_PATH.relative_to(ROOT).as_posix(),
+        "semantic_states_path": STATES_PATH.relative_to(ROOT).as_posix(),
+        "output_dir": OUT.relative_to(ROOT).as_posix(),
         "seeds": SEEDS,
         "horizon_hours": HORIZON_HOURS,
         "horizon_steps": HORIZON_STEPS,

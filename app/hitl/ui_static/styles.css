@@ -435,8 +435,26 @@ textarea:focus {
   font-size: 13px;
 }
 
+.row--similar {
+  grid-template-columns: minmax(190px, 0.9fr) minmax(150px, 1fr) 86px;
+  column-gap: 18px;
+}
+
 .row strong {
   color: var(--teal-dark);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.row span {
+  min-width: 0;
+}
+
+.row--similar span:last-child {
+  justify-self: end;
+  white-space: nowrap;
 }
 
 .row button {

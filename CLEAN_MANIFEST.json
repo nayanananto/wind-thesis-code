@@ -1,27 +1,45 @@
 {
-  "updated_at": "2026-06-03T20:45:17",
-  "canonical_repo": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo",
-  "final_benchmark": "NOAA KBOS 5-minute, two seeds, horizons 1h/3h/6h/12h",
-  "file_count_excluding_pycache": 127,
-  "size_mb_excluding_pycache": 38.33,
+  "schema_version": 2,
+  "updated_at": "2026-07-14",
+  "project": "Interpretable Semantic Wind-Regime Forecasting",
+  "final_benchmark": {
+    "primary_station": "KBOS",
+    "robustness_station": "DDC",
+    "sampling_interval": "5 minutes",
+    "window_rows": 48,
+    "window_step_rows": 12,
+    "horizon_hours": [1, 3, 6, 12],
+    "seeds": [42, 123]
+  },
+  "canonical_results": [
+    "results/5min_two_seed_experiments",
+    "results/ddc_5min_two_seed_experiments",
+    "results/kbos_gradient_boosting_experiments",
+    "results/ddc_gradient_boosting_experiments",
+    "results/token_state_lstm_experiments"
+  ],
   "included": [
     "app",
     "artifacts",
     "data",
+    "figures",
     "results",
     "scripts",
+    "tests",
     "theory_experiments",
+    "backtest_wind.py",
+    ".python-version",
+    "DATA_CARD.md",
+    "LICENSE",
     "README.md",
-    "requirements.txt",
-    "CLEAN_MANIFEST.json"
+    "requirements.txt"
   ],
   "excluded": [
-    "old mixed wind_forecasting_app folder dump",
+    ".git",
     ".env",
-    "venv/.venv",
-    "logs",
-    "cache",
-    "feedback/session logs"
-  ],
-  "final_results_dir": "results/5min_two_seed_experiments"
+    "virtual environments",
+    "Python caches",
+    "session memory",
+    "feedback/review logs"
+  ]
 }

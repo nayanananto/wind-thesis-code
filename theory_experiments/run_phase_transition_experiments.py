@@ -10,8 +10,8 @@ import pandas as pd
 from sklearn.metrics import f1_score
 
 
-PROJECT_ROOT = Path(r"C:\Users\Admin\Desktop\wind_forecasting_app")
-OUTPUT_DIR = Path(r"C:\Users\Admin\Desktop\nf1\wind_compression_experiments")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+OUTPUT_DIR = PROJECT_ROOT / "results" / "wind_compression_experiments"
 STATES_PATH = PROJECT_ROOT / "data" / "semantic" / "kbos_5min_phase_semantic_states.csv"
 HORIZONS = [1, 3, 6, 12]
 HISTORY_LENGTHS = [1, 2, 3, 4, 6]

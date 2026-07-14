@@ -1,6 +1,6 @@
 {
-  "data_path": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\data\\noaa_5min\\KAMA_2024_5min.parquet",
-  "semantic_states_path": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\data\\semantic\\kama_5min_phase_semantic_states.csv",
+  "data_path": "data/noaa_5min/DDC_2024_5min.parquet",
+  "semantic_states_path": "data/semantic/ddc_5min_phase_semantic_states.csv",
   "seeds": [
     42,
     123
@@ -22,7 +22,7 @@
   "numeric_step_hours": 168,
   "notes": [
     "Numeric horizons are converted from hours to 5-minute steps.",
-    "Numeric forecasting uses prior best tuned configs and reruns final evaluation only.",
+    "Numeric forecasting transfers the prior KBOS-selected configs and reruns final evaluation only.",
     "Phase transition and GRU use the 5-minute-derived semantic state sequence."
   ]
 }

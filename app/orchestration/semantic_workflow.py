@@ -9,6 +9,7 @@ from app.config.paths import (
     SEMANTIC_INDEX_DIR,
     TOKENIZER_ARTIFACT_DIR,
     ensure_project_dirs,
+    project_relative_path,
 )
 from app.preprocessing.feature_engineering import prepare_semantic_frame
 from app.semantic.labeling.regime_labeler import (
@@ -129,17 +130,17 @@ def run_semantic_build(
         "feature_columns": list(feature_matrix.columns),
         "llm_labels_enabled": bool(enable_llm_labels),
         "output_paths": {
-            "features": str(features_path),
-            "embeddings": str(embeddings_path),
-            "token_summary": str(token_summary_path),
-            "semantic_states": str(semantic_states_path),
-            "cluster_profiles": str(cluster_profiles_path),
-            "representative_examples": str(representative_examples_path),
-            "encoder": str(encoder_path),
-            "tokenizer": str(tokenizer_path),
-            "search_index": str(search_index_path),
+            "features": project_relative_path(features_path),
+            "embeddings": project_relative_path(embeddings_path),
+            "token_summary": project_relative_path(token_summary_path),
+            "semantic_states": project_relative_path(semantic_states_path),
+            "cluster_profiles": project_relative_path(cluster_profiles_path),
+            "representative_examples": project_relative_path(representative_examples_path),
+            "encoder": project_relative_path(encoder_path),
+            "tokenizer": project_relative_path(tokenizer_path),
+            "search_index": project_relative_path(search_index_path),
         },
     }
     save_json(metadata_path, metadata)
-    metadata["output_paths"]["metadata"] = str(metadata_path)
+    metadata["output_paths"]["metadata"] = project_relative_path(metadata_path)
     return metadata

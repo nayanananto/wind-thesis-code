@@ -1,0 +1,11 @@
+{
+  "cpu_power_watts": 65.0,
+  "grid_intensity_kg_co2_per_kwh": 0.62,
+  "workloads": [
+    {"name": "Gradient-boosting sweep (KBOS)", "seconds": 1731, "measured": true},
+    {"name": "Gradient-boosting sweep (DDC)", "seconds": 1247, "measured": true},
+    {"name": "GRU phase tuning + final", "seconds": 437, "measured": true},
+    {"name": "Transition-count tuning + final", "seconds": 60, "measured": false},
+    {"name": "Semantic build (PCA + k-means)", "seconds": 30, "measured": false}
+  ]
+}

@@ -33,10 +33,10 @@
     "dow_cos_std"
   ],
   "output_paths": {
-    "features": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\semantic\\smoke_semantic_window_features.csv",
-    "embeddings": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\semantic\\smoke_semantic_embeddings.csv",
-    "token_summary": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\semantic\\smoke_semantic_token_summary.csv",
-    "encoder": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\artifacts\\semantic_encoder\\smoke_semantic_encoder.joblib",
-    "tokenizer": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\artifacts\\tokenizer\\smoke_semantic_tokenizer.joblib"
+    "features": "data/semantic/smoke_semantic_window_features.csv",
+    "embeddings": "data/semantic/smoke_semantic_embeddings.csv",
+    "token_summary": "data/semantic/smoke_semantic_token_summary.csv",
+    "encoder": "artifacts/semantic_encoder/smoke_semantic_encoder.joblib",
+    "tokenizer": "artifacts/tokenizer/smoke_semantic_tokenizer.joblib"
   }
 }

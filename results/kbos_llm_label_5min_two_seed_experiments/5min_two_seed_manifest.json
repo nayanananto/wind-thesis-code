@@ -1,6 +1,6 @@
 {
-  "data_path": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\data\\noaa_5min\\KBOS_2024_5min.parquet",
-  "semantic_states_path": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\data\\semantic\\kbos_5min_phase_semantic_states.csv",
+  "data_path": "data/noaa_5min/KBOS_2024_5min.parquet",
+  "semantic_states_path": "data/semantic/kbos_5min_phase_semantic_states.csv",
   "seeds": [
     42,
     123

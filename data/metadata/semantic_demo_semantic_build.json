@@ -34,14 +34,14 @@
   ],
   "llm_labels_enabled": false,
   "output_paths": {
-    "features": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\semantic\\semantic_demo_window_features.csv",
-    "embeddings": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\semantic\\semantic_demo_embeddings.csv",
-    "token_summary": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\semantic\\semantic_demo_token_summary.csv",
-    "semantic_states": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\semantic\\semantic_demo_semantic_states.csv",
-    "cluster_profiles": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\semantic\\semantic_demo_cluster_profiles.csv",
-    "representative_examples": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\semantic\\semantic_demo_representative_examples.csv",
-    "encoder": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\artifacts\\semantic_encoder\\semantic_demo_encoder.joblib",
-    "tokenizer": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\artifacts\\tokenizer\\semantic_demo_tokenizer.joblib",
-    "search_index": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\artifacts\\semantic_index\\semantic_demo_search_index.joblib"
+    "features": "data/semantic/semantic_demo_window_features.csv",
+    "embeddings": "data/semantic/semantic_demo_embeddings.csv",
+    "token_summary": "data/semantic/semantic_demo_token_summary.csv",
+    "semantic_states": "data/semantic/semantic_demo_semantic_states.csv",
+    "cluster_profiles": "data/semantic/semantic_demo_cluster_profiles.csv",
+    "representative_examples": "data/semantic/semantic_demo_representative_examples.csv",
+    "encoder": "artifacts/semantic_encoder/semantic_demo_encoder.joblib",
+    "tokenizer": "artifacts/tokenizer/semantic_demo_tokenizer.joblib",
+    "search_index": "artifacts/semantic_index/semantic_demo_search_index.joblib"
   }
 }

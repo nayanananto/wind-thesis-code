@@ -1,0 +1,7 @@
+workload,seconds,measured,energy_kwh,co2_g
+Gradient-boosting sweep (KBOS),1731,True,0.031254,19.400000
+Gradient-boosting sweep (DDC),1247,True,0.022515,14.000000
+GRU phase tuning + final,437,True,0.007890,4.900000
+Transition-count tuning + final,60,False,0.001083,0.700000
+Semantic build (PCA + k-means),30,False,0.000542,0.300000
+Total,3505,False,0.063285,39.300000

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -11,10 +12,7 @@ except ModuleNotFoundError:
     load_scada_data = None
 
 
-DEFAULT_REMOTE_WIND_URL = (
-    "https://raw.githubusercontent.com/nayanananto/"
-    "wind-data-pipeline/main/data/wind_data.csv"
-)
+DEFAULT_REMOTE_WIND_URL = os.getenv("WIND_DATA_URL", "")
 
 
 def _normalize_datetime(df: pd.DataFrame, time_col: str = "datetime") -> pd.DataFrame:
@@ -31,6 +29,8 @@ def load_runtime_wind_data(
     local_path: str | Path | None = None,
     hist_path: str | Path | None = None,
 ) -> pd.DataFrame:
+    if not remote_url:
+        raise ValueError("Set WIND_DATA_URL or pass remote_url to load runtime wind data.")
     if fetch_wind_data is None:
         raise ModuleNotFoundError(
             "fetch_wind_data is unavailable because utils.py is not included in this clean codebase. "

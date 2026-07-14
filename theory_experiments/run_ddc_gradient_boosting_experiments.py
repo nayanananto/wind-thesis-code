@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import time
@@ -16,13 +17,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from test_ollama import infer_time_step, metrics, seasonal_persistence, set_reproducible  # noqa: E402
+from backtest_wind import infer_time_step, metrics, seasonal_persistence, set_reproducible  # noqa: E402
 
 
-DATA_PATH = ROOT / "data" / "noaa_5min" / "KAMA_2024_5min.parquet"
-STATES_PATH = ROOT / "data" / "semantic" / "kama_5min_phase_semantic_states.csv"
-OUT = ROOT / "results" / "kama_gradient_boosting_experiments"
-LSTM_RESULTS = ROOT / "results" / "kama_5min_two_seed_experiments"
+DATA_PATH = ROOT / "data" / "noaa_5min" / "DDC_2024_5min.parquet"
+STATES_PATH = ROOT / "data" / "semantic" / "ddc_5min_phase_semantic_states.csv"
+OUT = ROOT / "results" / "ddc_gradient_boosting_experiments"
+LSTM_RESULTS = ROOT / "results" / "ddc_5min_two_seed_experiments"
+KBOS_BEST_CONFIGS = ROOT / "results" / "kbos_gradient_boosting_experiments" / "gb_best_configs.csv"
 
 SEEDS = [42, 123]
 HORIZON_HOURS = [1, 3, 6, 12]
@@ -349,6 +351,19 @@ def fit_model(config: dict[str, Any], seed: int) -> HistGradientBoostingRegresso
     )
 
 
+def load_transferred_configs() -> dict[tuple[str, int], dict[str, Any]]:
+    """Load the KBOS-selected design/horizon settings for transfer to DDC."""
+
+    frame = pd.read_csv(KBOS_BEST_CONFIGS)
+    required = {"design", "horizon_hours", "config_json"}
+    if not required.issubset(frame.columns):
+        raise ValueError(f"Missing columns in {KBOS_BEST_CONFIGS}: {sorted(required - set(frame.columns))}")
+    transferred: dict[tuple[str, int], dict[str, Any]] = {}
+    for _, row in frame.iterrows():
+        transferred[(str(row["design"]), int(row["horizon_hours"]))] = json.loads(row["config_json"])
+    return transferred
+
+
 def evaluate_forecast(
     df: pd.DataFrame,
     cutoff: pd.Timestamp,
@@ -514,6 +529,10 @@ def write_lstm_comparison(gb_summary: pd.DataFrame) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Run the transferred-config DDC gradient-boosting evaluation.")
+    parser.add_argument("--resume", action="store_true", help="Resume from the *_live.csv checkpoints.")
+    args = parser.parse_args()
+
     OUT.mkdir(parents=True, exist_ok=True)
     start = time.time()
     df = load_raw_frame()
@@ -521,33 +540,48 @@ def main() -> None:
     time_step = infer_time_step(df)
     target = df.set_index("datetime").sort_index()["wind_speed"]
     caches = build_feature_caches(df, states)
+    transferred_configs = load_transferred_configs()
 
-    tuning_rows: list[pd.DataFrame] = []
     best_rows: list[dict[str, Any]] = []
     final_rows: list[pd.DataFrame] = []
     split_rows: list[pd.DataFrame] = []
+    completed: set[tuple[str, int]] = set()
+    if args.resume:
+        best_live = OUT / "gb_best_configs_live.csv"
+        final_live = OUT / "gb_final_results_live.csv"
+        split_live = OUT / "gb_split_metrics_live.csv"
+        if best_live.exists():
+            best_rows = pd.read_csv(best_live).to_dict(orient="records")
+        if final_live.exists():
+            existing_final = pd.read_csv(final_live)
+            final_rows.append(existing_final)
+            counts = existing_final.groupby(["design", "horizon_hours"])["seed"].nunique()
+            completed = {
+                (str(design), int(horizon))
+                for (design, horizon), count in counts.items()
+                if int(count) >= len(SEEDS)
+            }
+        if split_live.exists():
+            split_rows.append(pd.read_csv(split_live))
+        print(f"[resume] completed design/horizon pairs: {len(completed)}", flush=True)
 
     for horizon_hours in HORIZON_HOURS:
         horizon_steps = HORIZON_STEPS[horizon_hours]
         cutoffs = make_cutoffs(df, horizon_steps)
         final_cutoffs = select_even(cutoffs, FINAL_SPLITS)
-        tuning_cutoffs = select_tuning_cutoffs(cutoffs, final_cutoffs)
         print(
             f"[horizon] {horizon_hours}h/{horizon_steps}steps "
-            f"tuning={list(tuning_cutoffs)} final={list(final_cutoffs)}",
+            f"transferred_config=KBOS final={list(final_cutoffs)}",
             flush=True,
         )
         for design, cache in caches.items():
-            tuning_table, best_config = tune_design_horizon(
-                df=df,
-                target=target,
-                cache=cache,
-                horizon_hours=horizon_hours,
-                horizon_steps=horizon_steps,
-                tuning_cutoffs=tuning_cutoffs,
-                time_step=time_step,
-            )
-            tuning_rows.append(tuning_table)
+            if (design, int(horizon_hours)) in completed:
+                print(f"[resume] skip {design} h={horizon_hours}", flush=True)
+                continue
+            config_key = (design, int(horizon_hours))
+            if config_key not in transferred_configs:
+                raise KeyError(f"No transferred KBOS configuration for {config_key}")
+            best_config = transferred_configs[config_key]
             best_rows.append(
                 {
                     "design": design,
@@ -555,8 +589,7 @@ def main() -> None:
                     "horizon_steps": horizon_steps,
                     "config_id": best_config["config_id"],
                     "config_json": json.dumps(best_config, sort_keys=True),
-                    "tuning_mae": float(tuning_table.iloc[0]["mae"]),
-                    "tuning_rmse": float(tuning_table.iloc[0]["rmse"]),
+                    "config_source": "KBOS validation selection",
                 }
             )
             final, splits = final_eval(
@@ -572,18 +605,15 @@ def main() -> None:
             final_rows.append(final)
             split_rows.append(splits)
 
-            pd.concat(tuning_rows, ignore_index=True).to_csv(OUT / "gb_tuning_results_live.csv", index=False)
             pd.DataFrame(best_rows).to_csv(OUT / "gb_best_configs_live.csv", index=False)
             pd.concat(final_rows, ignore_index=True).to_csv(OUT / "gb_final_results_live.csv", index=False)
             pd.concat(split_rows, ignore_index=True).to_csv(OUT / "gb_split_metrics_live.csv", index=False)
 
-    tuning = pd.concat(tuning_rows, ignore_index=True)
     best = pd.DataFrame(best_rows)
     final = pd.concat(final_rows, ignore_index=True)
     splits = pd.concat(split_rows, ignore_index=True)
     summary = aggregate(final)
 
-    tuning.to_csv(OUT / "gb_tuning_results.csv", index=False)
     best.to_csv(OUT / "gb_best_configs.csv", index=False)
     final.to_csv(OUT / "gb_final_results.csv", index=False)
     splits.to_csv(OUT / "gb_split_metrics.csv", index=False)
@@ -592,16 +622,18 @@ def main() -> None:
 
     manifest = {
         "algorithm": "HistGradientBoostingRegressor",
-        "data_path": str(DATA_PATH),
-        "semantic_states_path": str(STATES_PATH),
-        "output_dir": str(OUT),
+        "data_path": DATA_PATH.relative_to(ROOT).as_posix(),
+        "semantic_states_path": STATES_PATH.relative_to(ROOT).as_posix(),
+        "output_dir": OUT.relative_to(ROOT).as_posix(),
         "seeds": SEEDS,
         "horizon_hours": HORIZON_HOURS,
         "horizon_steps": HORIZON_STEPS,
         "train_days": TRAIN_DAYS,
         "step_hours": STEP_HOURS,
         "final_splits": FINAL_SPLITS,
-        "tuning_splits": TUNING_SPLITS,
+        "tuning_splits": 0,
+        "configuration_protocol": "KBOS-selected configurations transferred unchanged to DDC",
+        "configuration_source": KBOS_BEST_CONFIGS.relative_to(ROOT).as_posix(),
         "lookback_steps_for_raw_window": LOOKBACK_STEPS,
         "origin_frequency": ORIGIN_FREQ,
         "designs": {name: cache.columns for name, cache in caches.items()},
@@ -609,9 +641,11 @@ def main() -> None:
         "notes": [
             "Gradient boosting is evaluated as a tabular learner for raw-window and compressed semantic representations.",
             "The model uses direct horizon conditioning: lead step and future calendar features are added to each origin feature vector.",
+            "DDC final evaluation transfers the design/horizon configurations selected on KBOS validation folds.",
             "LLM-refined regime names are not used as model inputs; token IDs/embeddings/statistical features are non-LLM outputs.",
         ],
-        "elapsed_sec": round(time.time() - start, 2),
+        "execution_mode": "resume" if args.resume else "full",
+        "last_invocation_elapsed_sec": round(time.time() - start, 2),
     }
     (OUT / "gb_manifest.json").write_text(json.dumps(_json_safe(manifest), indent=2), encoding="utf-8")
 

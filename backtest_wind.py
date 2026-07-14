@@ -1,5 +1,4 @@
-# backtest_wind.py
-from __future__ import annotations
+﻿from __future__ import annotations
 import argparse, math, warnings
 import numpy as np
 import pandas as pd
@@ -136,8 +135,8 @@ def metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
         nrmse_std = float("nan")
         nmse = float("nan")
     else:
-        nrmse_std = rmse / std                 # RMSE / σ
-        nmse = mse / (std ** 2)                # MSE / σ²
+        nrmse_std = rmse / std                 # RMSE / Ïƒ
+        nmse = mse / (std ** 2)                # MSE / ÏƒÂ²
 
     return {
         "mae": mae,

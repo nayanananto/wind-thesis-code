@@ -1,5 +1,5 @@
 {
-  "data_path": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\wind_data.csv",
+  "data_path": "data/wind_data.csv",
   "rows_after_loading": 42936,
   "datetime_min": "2021-01-01 00:00:00+00:00",
   "datetime_max": "2025-11-24 23:00:00+00:00",

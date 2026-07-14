@@ -8,10 +8,10 @@ import pandas as pd
 
 
 ROOT = Path(__file__).resolve().parents[1]
-METADATA_PATH = ROOT / "data" / "metadata" / "kama_5min_phase_semantic_build.json"
-RAW_PATH = ROOT / "data" / "noaa_5min" / "KAMA_2024_5min.parquet"
-ENCODER_PATH = ROOT / "artifacts" / "semantic_encoder" / "kama_5min_phase_encoder.joblib"
-OUT = ROOT / "results" / "kama_5min_two_seed_experiments"
+METADATA_PATH = ROOT / "data" / "metadata" / "ddc_5min_phase_semantic_build.json"
+RAW_PATH = ROOT / "data" / "noaa_5min" / "DDC_2024_5min.parquet"
+ENCODER_PATH = ROOT / "artifacts" / "semantic_encoder" / "ddc_5min_phase_encoder.joblib"
+OUT = ROOT / "results" / "ddc_5min_two_seed_experiments"
 
 
 def reduction_percent(before: float, after: float) -> float:

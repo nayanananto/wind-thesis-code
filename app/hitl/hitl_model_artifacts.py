@@ -478,7 +478,9 @@ def _phase_feature_columns(frame: pd.DataFrame) -> list[str]:
 
 
 def _load_semantic_states(metadata_path: str | Path) -> tuple[dict[str, Any], pd.DataFrame]:
-    metadata = _read_json(Path(metadata_path))
+    from app.hitl.semantic_review import load_semantic_metadata
+
+    metadata = load_semantic_metadata(metadata_path)
     path = Path(metadata["output_paths"]["semantic_states"])
     if not path.exists():
         matches = list(Path.cwd().glob(f"**/{path.name}"))

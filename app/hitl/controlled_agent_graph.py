@@ -302,7 +302,7 @@ class ControlledHITLAgentGraph:
         direct_phase_request = bool(words & {"predict", "forecast"}) and bool(words & {"next"}) and bool(
             words & {"phase", "token", "regime", "state"}
         )
-        direct_feedback_request = bool(words & {"accept", "approve", "flag", "wrong", "incorrect", "reject", "relabel", "note"})
+        direct_feedback_request = bool(words & {"accept", "approve", "flag", "wrong", "incorrect", "reject", "note"})
         direct_core_request = direct_phase_request or direct_current_state_request or direct_retrieval_request or direct_feedback_request
         explicit_previous_context = bool(words & {"previous", "prior", "last", "earlier", "predicted", "forecasted"})
         conversation_relevant = bool(
@@ -577,18 +577,14 @@ class ControlledHITLAgentGraph:
         last_review = memory.get("last_review") if isinstance(memory.get("last_review"), dict) else {}
         if last_review:
             action = last_review.get("action")
+            if action == "reject":
+                action = "flag"
+            elif action == "relabel":
+                action = "note"
             model_token = last_review.get("model_predicted_token")
-            human_token = last_review.get("human_preferred_token")
-            if action == "relabel":
+            if action == "flag":
                 text = (
-                    f"Human review relabeled the previous forecast: model predicted token {model_token}, "
-                    f"human preferred token {human_token if human_token is not None else last_review.get('label')}. "
-                    f"Note: {last_review.get('note', '')}"
-                )
-            elif action in {"flag", "reject"}:
-                verb = "flagged" if action == "flag" else "rejected"
-                text = (
-                    f"Human review {verb} the previous forecast for model token {model_token}. "
+                    f"Human review flagged the previous forecast for model token {model_token}. "
                     f"Note: {last_review.get('note', '')}"
                 )
             elif action == "accept":
@@ -740,10 +736,6 @@ class ControlledHITLAgentGraph:
                 "flag",
                 "flagged",
                 "reject",
-                "rejected",
-                "relabel",
-                "relabeled",
-                "preferred",
                 "correction",
                 "corrected",
                 "summary",
@@ -778,7 +770,7 @@ class ControlledHITLAgentGraph:
             "Read the user's comparative wording carefully: most/closest means lowest retrieval_distance; "
             "least/farthest/most different means highest retrieval_distance among the selected retrieved windows.\n"
             "If selected_memory contains human_review, distinguish the model prediction from the human review state. "
-            "Do not say the model changed; say the session review state was accepted, flagged, rejected, relabeled, or noted. "
+            "Do not say the model changed; say the session review state was accepted, flagged, or noted. "
             "When a human_review record is present, the answer must include one explicit sentence beginning exactly with "
             "'Human review state:' that summarizes the review action and note.\n"
             "If the selected memory is insufficient, say exactly what core HITL tool should be run next.\n"
@@ -834,19 +826,14 @@ class ControlledHITLAgentGraph:
             return answer
         review = review_chunks[0].get("payload", {}) if isinstance(review_chunks[0].get("payload"), dict) else {}
         action = review.get("action")
+        if action == "reject":
+            action = "flag"
+        elif action == "relabel":
+            action = "note"
         model_token = review.get("model_predicted_token")
-        human_token = review.get("human_preferred_token")
         note = review.get("note")
-        if action == "relabel":
-            preferred = human_token if human_token is not None else review.get("label") or "unspecified"
-            sentence = (
-                f"Human review state: the model predicted next token {model_token}, "
-                f"but the human preferred token is {preferred}."
-            )
-        elif action == "flag":
+        if action == "flag":
             sentence = f"Human review state: the model-predicted next token {model_token} was flagged for caution."
-        elif action == "reject":
-            sentence = f"Human review state: the model-predicted next token {model_token} was rejected."
         elif action == "accept":
             sentence = f"Human review state: the model-predicted next token {model_token} was accepted."
         else:
@@ -927,11 +914,7 @@ class ControlledHITLAgentGraph:
                 "accept",
                 "flagged",
                 "flag",
-                "rejected",
                 "reject",
-                "relabeled",
-                "relabel",
-                "preferred",
                 "correction",
                 "corrected",
                 "summarize",
@@ -1031,22 +1014,16 @@ class ControlledHITLAgentGraph:
         if not review:
             return ""
         action = review.get("action")
+        if action == "reject":
+            action = "flag"
+        elif action == "relabel":
+            action = "note"
         model_token = review.get("model_predicted_token")
-        human_token = review.get("human_preferred_token")
-        label = review.get("label")
         note = review.get("note")
         if action == "accept":
             text = f"Human review state: accepted the model-predicted next token {model_token}."
         elif action == "flag":
             text = f"Human review state: flagged the model-predicted next token {model_token}; treat this prediction as needing caution."
-        elif action == "reject":
-            text = f"Human review state: rejected the model-predicted next token {model_token}; treat this as a disagreement case."
-        elif action == "relabel":
-            preferred = human_token if human_token is not None else label or "unspecified"
-            text = (
-                f"Human review state: model predicted next token {model_token}, but the human preferred token is {preferred}. "
-                "The model output was not changed; the session review state records this disagreement."
-            )
         else:
             text = f"Human review state: note saved for the model-predicted next token {model_token}."
         if note:
@@ -1217,7 +1194,7 @@ class ControlledHITLAgentGraph:
             result = {
                 **result,
                 "review_state": review_state,
-                "answer": self._review_answer_text(review_state, result.get("answer")),
+                "answer": self._review_answer_text(review_state),
             }
         return {**state, "result": result, "trace": self._append_trace(state, "tool:record_feedback")}
 
@@ -1256,18 +1233,29 @@ class ControlledHITLAgentGraph:
         action = str(feedback.get("action") or "note").lower()
         label = str(feedback.get("label") or "")
         note = str(feedback.get("note") or "")
-        human_token = self._parse_relabel_token(label, note) if action == "relabel" else None
+        if action == "reject":
+            action = "flag"
+        elif action == "relabel":
+            action = "note"
+        human_token = None
         model_token = top.get("token_id")
         try:
             model_token = int(model_token) if model_token is not None else None
         except Exception:
             model_token = None
 
+        current_live_state = phase.get("current_live_state") if isinstance(phase, dict) else {}
+        source_window = None
+        source_window_type = "historical_context"
+        if isinstance(current_live_state, dict) and current_live_state.get("window_id"):
+            source_window = current_live_state.get("window_id")
+            source_window_type = "live_input_window"
+        elif phase_result.get("window_id") or result.get("window_id"):
+            source_window = phase_result.get("window_id") or result.get("window_id")
+
         status_map = {
             "accept": "accepted",
             "flag": "flagged",
-            "reject": "rejected",
-            "relabel": "relabeled",
             "note": "noted",
         }
         return {
@@ -1280,7 +1268,8 @@ class ControlledHITLAgentGraph:
             "status": status_map.get(action, action),
             "label": label,
             "note": note,
-            "window_id": phase_result.get("window_id") or result.get("window_id"),
+            "window_id": source_window,
+            "source_window_type": source_window_type,
             "token_sequence": phase.get("live_token_sequence") or phase.get("token_sequence") or [],
             "model_predicted_token": model_token,
             "model_predicted_regime": top.get("regime_name"),
@@ -1295,24 +1284,32 @@ class ControlledHITLAgentGraph:
     def _review_answer_text(review: dict[str, Any], base_answer: Any = None) -> str:
         action = review.get("action")
         model_token = review.get("model_predicted_token")
-        human_token = review.get("human_preferred_token")
         note = review.get("note")
+        source_window = review.get("window_id") or "unknown"
+        source_label = (
+            "live input window"
+            if review.get("source_window_type") == "live_input_window"
+            else "source context window"
+        )
+        predicted_regime = review.get("model_predicted_regime")
+        target = (
+            f"forecasted next token {model_token}"
+            if model_token is not None
+            else "the last forecasted next token"
+        )
+        if predicted_regime:
+            target = f"{target} ({predicted_regime})"
+
         if action == "accept":
-            detail = f"Review state updated: the human reviewer accepted the model-predicted next token {model_token}."
+            detail = f"Accepted {target}."
         elif action == "flag":
-            detail = f"Review state updated: the human reviewer flagged the model-predicted next token {model_token} for caution."
-        elif action == "reject":
-            detail = f"Review state updated: the human reviewer rejected the model-predicted next token {model_token}."
-        elif action == "relabel":
-            detail = (
-                f"Review state updated: the model predicted next token {model_token}, "
-                f"but the human preferred token is {human_token if human_token is not None else review.get('label') or 'unspecified'}."
-            )
+            detail = f"Flagged {target} for review."
         else:
-            detail = f"Review note saved for model token {model_token}."
+            detail = f"Saved a note for {target}."
         if note:
             detail = f"{detail} Note: {note}"
-        return detail if not base_answer else f"{base_answer} {detail}"
+        clarification = f"{detail} Forecast {source_label}: {source_window}."
+        return clarification if not base_answer else f"{base_answer} {clarification}"
 
     def _run_retrieval(self, state: HITLAgentState) -> HITLAgentState:
         if state.get("target_predicted_numeric_window"):
@@ -1511,6 +1508,15 @@ class ControlledHITLAgentGraph:
             result["critic_warnings"] = state["critic_warnings"]
 
         final_result = {**self._base_result(state), **result}
+        phase_payload = final_result.get("phase_prediction", {})
+        phase_evidence = phase_payload.get("evidence", {}) if isinstance(phase_payload, dict) else {}
+        evidence_pack = final_result.get("evidence_pack", {})
+        current_live_state = phase_evidence.get("current_live_state", {}) if isinstance(phase_evidence, dict) else {}
+        if not current_live_state and isinstance(evidence_pack, dict):
+            current_live_state = evidence_pack.get("current_state", {})
+        live_window_id = current_live_state.get("window_id") if isinstance(current_live_state, dict) else None
+        if live_window_id and str(live_window_id).startswith("live_"):
+            final_result["window_id"] = str(live_window_id)
         self._save_session_memory(state, final_result)
         return {**state, "result": final_result, "trace": agent_trace}
 

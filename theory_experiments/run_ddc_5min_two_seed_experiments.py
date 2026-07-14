@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from test_ollama import load_features, rolling_backtest, set_reproducible  # noqa: E402
+from backtest_wind import load_features, rolling_backtest, set_reproducible  # noqa: E402
 
 
 SEEDS = [42, 123]
@@ -26,9 +26,9 @@ NUMERIC_FINAL_SPLITS = 2
 NUMERIC_TRAIN_DAYS = 30
 NUMERIC_STEP_HOURS = 168
 
-DATA_PATH = ROOT / "data" / "noaa_5min" / "KAMA_2024_5min.parquet"
-STATES_PATH = ROOT / "data" / "semantic" / "kama_5min_phase_semantic_states.csv"
-OUT = ROOT / "results" / "kama_5min_two_seed_experiments"
+DATA_PATH = ROOT / "data" / "noaa_5min" / "DDC_2024_5min.parquet"
+STATES_PATH = ROOT / "data" / "semantic" / "ddc_5min_phase_semantic_states.csv"
+OUT = ROOT / "results" / "ddc_5min_two_seed_experiments"
 PREVIOUS_RESULTS = ROOT / "results" / "wind_compression_experiments"
 
 
@@ -216,7 +216,7 @@ def run_phase_transition_5min() -> pd.DataFrame:
 
 
 def run_gru_phase_5min() -> pd.DataFrame:
-    gru = _load_module(ROOT / "theory_experiments" / "temp_gru_phase_roi.py", "gru_phase_runner")
+    gru = _load_module(ROOT / "theory_experiments" / "gru_phase_roi.py", "gru_phase_runner")
     gru.STATES_PATH = STATES_PATH
     gru.OUTPUT_DIR = OUT
     states, tokens, features, _feature_columns = gru.load_state_frame()
@@ -231,7 +231,7 @@ def run_gru_phase_5min() -> pd.DataFrame:
     train_val_mask[:val_end] = True
     test_mask[val_end:] = True
     config_map = {cfg["config_id"]: cfg for cfg in gru.configs()}
-    best = pd.read_csv(PREVIOUS_RESULTS / "temp_gru_phase_roi_best_configs.csv")
+    best = pd.read_csv(PREVIOUS_RESULTS / "gru_phase_roi_best_configs.csv")
     rows: list[dict[str, Any]] = []
 
     for seed in SEEDS:
@@ -293,8 +293,8 @@ def aggregate_results(
     gru_summary.to_csv(OUT / "gru_phase_5min_two_seed_summary.csv", index=False)
 
     manifest = {
-        "data_path": str(DATA_PATH),
-        "semantic_states_path": str(STATES_PATH),
+        "data_path": DATA_PATH.relative_to(ROOT).as_posix(),
+        "semantic_states_path": STATES_PATH.relative_to(ROOT).as_posix(),
         "seeds": SEEDS,
         "horizon_hours": HORIZON_HOURS,
         "horizon_steps": HORIZON_STEPS,
@@ -303,7 +303,7 @@ def aggregate_results(
         "numeric_step_hours": NUMERIC_STEP_HOURS,
         "notes": [
             "Numeric horizons are converted from hours to 5-minute steps.",
-            "Numeric forecasting uses prior best tuned configs and reruns final evaluation only.",
+            "Numeric forecasting transfers the prior KBOS-selected configs and reruns final evaluation only.",
             "Phase transition and GRU use the 5-minute-derived semantic state sequence.",
         ],
     }

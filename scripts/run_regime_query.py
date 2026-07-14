@@ -1,5 +1,4 @@
 import argparse
-import json
 from pathlib import Path
 import sys
 
@@ -11,11 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from app.semantic.labeling.llm_regime_explainer import LLMRegimeExplainer
 from app.semantic.retrieval.similar_regime_search import SimilarRegimeSearcher
-
-
-def _load_metadata(path: Path) -> dict:
-    with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+from app.hitl.semantic_review import load_semantic_metadata
 
 
 def main() -> None:
@@ -27,7 +22,7 @@ def main() -> None:
     parser.add_argument("--enable_llm_explanation", action="store_true")
     args = parser.parse_args()
 
-    metadata = _load_metadata(Path(args.metadata))
+    metadata = load_semantic_metadata(Path(args.metadata))
     search_index_path = metadata["output_paths"]["search_index"]
     state_frame_path = metadata["output_paths"]["semantic_states"]
 

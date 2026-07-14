@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import argparse
+from contextlib import asynccontextmanager
+import os
 from pathlib import Path
 import subprocess
 import sys
 from typing import Any
+from urllib.request import urlopen
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
@@ -29,96 +33,167 @@ DEFAULT_PHASE_MODEL = PROJECT_ROOT / "artifacts" / "hitl_phase_gru" / "kbos_hour
 DEFAULT_LOCAL_LIVE_HISTORY = PROJECT_ROOT / "data" / "live" / "semantic_states" / "KBOS_live_semantic_history.csv"
 DEFAULT_LOCAL_LIVE_STATE = PROJECT_ROOT / "data" / "live" / "semantic_states" / "KBOS_live_semantic_state.json"
 DEFAULT_LOCAL_LIVE_RAW = PROJECT_ROOT / "data" / "live" / "aviationweather_metar" / "KBOS" / "metar_live.csv"
-DEFAULT_LIVE_PACKAGE = PROJECT_ROOT.parent / "wind_live_hitl_github_package"
-DEFAULT_PACKAGE_LIVE_HISTORY = DEFAULT_LIVE_PACKAGE / "data" / "live" / "semantic_states" / "KBOS_live_semantic_history.csv"
-DEFAULT_PACKAGE_LIVE_STATE = DEFAULT_LIVE_PACKAGE / "data" / "live" / "semantic_states" / "KBOS_live_semantic_state.json"
-DEFAULT_PACKAGE_LIVE_RAW = DEFAULT_LIVE_PACKAGE / "data" / "live" / "aviationweather_metar" / "KBOS" / "metar_live.csv"
+DEFAULT_GITHUB_RAW_BASE = os.getenv("WIND_LIVE_DATA_BASE_URL", "").rstrip("/")
+DEFAULT_GITHUB_LIVE_FILES = {
+    "history": (
+        "data/live/semantic_states/KBOS_live_semantic_history.csv",
+        DEFAULT_LOCAL_LIVE_HISTORY,
+    ),
+    "state": (
+        "data/live/semantic_states/KBOS_live_semantic_state.json",
+        DEFAULT_LOCAL_LIVE_STATE,
+    ),
+    "raw": (
+        "data/live/aviationweather_metar/KBOS/metar_live.csv",
+        DEFAULT_LOCAL_LIVE_RAW,
+    ),
+}
+STARTUP_LIVE_SYNC: dict[str, Any] | None = None
 
 
 def _default_live_history_path() -> Path:
-    return DEFAULT_PACKAGE_LIVE_HISTORY if DEFAULT_PACKAGE_LIVE_HISTORY.exists() else DEFAULT_LOCAL_LIVE_HISTORY
+    return DEFAULT_LOCAL_LIVE_HISTORY
 
 
 def _default_live_state_path() -> Path:
-    return DEFAULT_PACKAGE_LIVE_STATE if DEFAULT_PACKAGE_LIVE_STATE.exists() else DEFAULT_LOCAL_LIVE_STATE
+    return DEFAULT_LOCAL_LIVE_STATE
 
 
 def _default_live_raw_path() -> Path:
-    return DEFAULT_PACKAGE_LIVE_RAW if DEFAULT_PACKAGE_LIVE_RAW.exists() else DEFAULT_LOCAL_LIVE_RAW
+    return DEFAULT_LOCAL_LIVE_RAW
 
 
 def _default_metadata_path() -> Path:
     return DEFAULT_5MIN_METADATA if DEFAULT_5MIN_METADATA.exists() else DEFAULT_HOURLY_METADATA
 
 
-def _sync_live_package_on_load() -> dict[str, Any]:
-    """Fetch latest live GitHub data when the browser UI asks for defaults.
+def _download_github_live_files(timeout: int = 20) -> dict[str, Any]:
+    """Refresh live HITL files from GitHub raw content, with local-cache fallback.
 
-    The command is intentionally non-destructive. If the local live package has
-    uncommitted changes, `git pull --ff-only` fails instead of overwriting them.
+    This is intentionally best-effort: failed downloads do not block the UI. Any
+    successfully downloaded files overwrite the local live-cache files.
     """
 
-    if not DEFAULT_LIVE_PACKAGE.exists():
+    if not DEFAULT_GITHUB_RAW_BASE:
         return {
             "attempted": False,
             "ok": False,
-            "status": "missing_package",
-            "message": f"Live package not found: {DEFAULT_LIVE_PACKAGE}",
-        }
-    if not (DEFAULT_LIVE_PACKAGE / ".git").exists():
-        return {
-            "attempted": False,
-            "ok": False,
-            "status": "not_git_repo",
-            "message": f"Live package is not a git repo: {DEFAULT_LIVE_PACKAGE}",
+            "status": "remote_live_not_configured",
+            "message": "No WIND_LIVE_DATA_BASE_URL was configured.",
+            "files": [],
+            "failures": [],
         }
 
+    results: list[dict[str, Any]] = []
+    ok_count = 0
+    for name, (relative_path, destination) in DEFAULT_GITHUB_LIVE_FILES.items():
+        url = f"{DEFAULT_GITHUB_RAW_BASE}/{relative_path}"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            with urlopen(url, timeout=timeout) as response:
+                data = response.read()
+            if not data:
+                raise RuntimeError("empty response")
+            destination.write_bytes(data)
+            ok_count += 1
+            results.append(
+                {
+                    "name": name,
+                    "ok": True,
+                    "path": str(destination),
+                    "bytes": len(data),
+                }
+            )
+        except Exception as exc:
+            results.append(
+                {
+                    "name": name,
+                    "ok": False,
+                    "path": str(destination),
+                    "error": str(exc),
+                    "fallback_exists": destination.exists(),
+                }
+            )
+
+    failed = [row for row in results if not row["ok"]]
+    if ok_count == len(DEFAULT_GITHUB_LIVE_FILES):
+        status = "remote_live_synced"
+        message = "Latest live HITL files were downloaded from the configured remote source."
+    elif ok_count > 0:
+        status = "remote_live_partial"
+        message = f"Downloaded {ok_count}/{len(DEFAULT_GITHUB_LIVE_FILES)} live files; local cache used for missing files."
+    else:
+        status = "remote_live_fallback"
+        message = "Could not download configured live files; using the local/API fallback."
+
+    return {
+        "attempted": True,
+        "ok": ok_count > 0 or all(destination.exists() for _, destination in DEFAULT_GITHUB_LIVE_FILES.values()),
+        "status": status,
+        "message": message,
+        "files": results,
+        "failures": failed,
+    }
+
+
+def _run_live_command(command: list[str], timeout: int) -> dict[str, Any]:
     try:
         completed = subprocess.run(
-            ["git", "-c", f"safe.directory={DEFAULT_LIVE_PACKAGE.as_posix()}", "pull", "--ff-only"],
-            cwd=DEFAULT_LIVE_PACKAGE,
+            command,
+            cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=timeout,
             check=False,
         )
     except Exception as exc:
-        return {
-            "attempted": True,
-            "ok": False,
-            "status": "error",
-            "message": str(exc),
-        }
+        return {"ok": False, "returncode": None, "message": str(exc)}
 
     output = "\n".join(part.strip() for part in (completed.stdout, completed.stderr) if part.strip())
     if len(output) > 800:
         output = output[-800:]
     return {
-        "attempted": True,
         "ok": completed.returncode == 0,
-        "status": "pulled" if completed.returncode == 0 else "pull_failed",
-        "message": output or ("Already up to date." if completed.returncode == 0 else "git pull failed"),
+        "returncode": completed.returncode,
+        "message": output,
     }
 
 
-def _refresh_hourly_live_semantic_state() -> dict[str, Any]:
-    if DEFAULT_PACKAGE_LIVE_HISTORY.exists() and DEFAULT_PACKAGE_LIVE_STATE.exists():
-        return {
-            "attempted": False,
-            "ok": True,
-            "status": "using_package_live_state",
-            "message": "Using the synced GitHub live semantic state as the HITL live phase source.",
-        }
+def _fetch_live_metar_from_aviationweather() -> dict[str, Any]:
+    output_dir = PROJECT_ROOT / "data" / "live" / "aviationweather_metar"
+    command = [
+        sys.executable,
+        str(PROJECT_ROOT / "scripts" / "fetch_aviationweather_metar.py"),
+        "--station",
+        "KBOS",
+        "--hours",
+        "18",
+        "--output_dir",
+        str(output_dir),
+        "--timeout",
+        "30",
+    ]
+    result = _run_live_command(command, timeout=45)
+    return {
+        "attempted": True,
+        "ok": bool(result["ok"]),
+        "status": "metar_fetched" if result["ok"] else "metar_fetch_failed",
+        "message": result["message"] or ("Live METAR rows fetched." if result["ok"] else "METAR fetch failed."),
+        "output_csv": str(DEFAULT_LOCAL_LIVE_RAW),
+    }
 
-    if not DEFAULT_HOURLY_METADATA.exists():
+
+def _build_live_semantic_state_from_raw() -> dict[str, Any]:
+    metadata = _default_metadata_path()
+    if not metadata.exists():
         return {
             "attempted": False,
             "ok": False,
-            "status": "missing_hourly_metadata",
-            "message": f"Hourly metadata not found: {DEFAULT_HOURLY_METADATA}",
+            "status": "missing_metadata",
+            "message": f"Semantic metadata not found: {metadata}",
         }
 
-    live_raw = _default_live_raw_path()
+    live_raw = DEFAULT_LOCAL_LIVE_RAW if DEFAULT_LOCAL_LIVE_RAW.exists() else _default_live_raw_path()
     if not live_raw.exists():
         return {
             "attempted": False,
@@ -134,7 +209,7 @@ def _refresh_hourly_live_semantic_state() -> dict[str, Any]:
         "--live_csv",
         str(live_raw),
         "--metadata",
-        str(DEFAULT_HOURLY_METADATA),
+        str(metadata),
         "--station",
         "KBOS",
         "--live_window_rows",
@@ -146,32 +221,77 @@ def _refresh_hourly_live_semantic_state() -> dict[str, Any]:
         "--output_dir",
         str(output_dir),
     ]
+    result = _run_live_command(command, timeout=75)
+    return {
+        "attempted": True,
+        "ok": bool(result["ok"]),
+        "status": "semantic_state_rebuilt" if result["ok"] else "semantic_state_rebuild_failed",
+        "message": result["message"] or (
+            "Live semantic state rebuilt from the latest METAR rows."
+            if result["ok"]
+            else "Live semantic state rebuild failed."
+        ),
+        "metadata": str(metadata),
+        "live_raw": str(live_raw),
+    }
 
-    try:
-        completed = subprocess.run(
-            command,
-            cwd=PROJECT_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=60,
-            check=False,
-        )
-    except Exception as exc:
+
+def _refresh_live_semantic_state_from_aviationweather() -> dict[str, Any]:
+    """Fetch METAR rows and rebuild live semantic state if GitHub live state is unavailable."""
+
+    fetch = _fetch_live_metar_from_aviationweather()
+    if not fetch["ok"]:
         return {
             "attempted": True,
             "ok": False,
-            "status": "error",
-            "message": str(exc),
+            "status": "aviationweather_failed",
+            "message": f"Could not fetch fresh METAR rows: {fetch['message']}",
+            "fetch": fetch,
         }
 
-    output = "\n".join(part.strip() for part in (completed.stdout, completed.stderr) if part.strip())
-    if len(output) > 800:
-        output = output[-800:]
+    build = _build_live_semantic_state_from_raw()
     return {
         "attempted": True,
-        "ok": completed.returncode == 0,
-        "status": "refreshed" if completed.returncode == 0 else "refresh_failed",
-        "message": output or ("Live semantic state refreshed." if completed.returncode == 0 else "refresh failed"),
+        "ok": bool(build["ok"]),
+        "status": "live_api_refreshed" if build["ok"] else "live_api_build_failed",
+        "message": (
+            "Fresh AviationWeather METAR rows were fetched and the live semantic state was rebuilt."
+            if build["ok"]
+            else f"METAR fetch succeeded, but semantic rebuild failed: {build['message']}"
+        ),
+        "fetch": fetch,
+        "build": build,
+    }
+
+
+def _refresh_live_state_with_fallback() -> dict[str, Any]:
+    github_live = _download_github_live_files()
+    if github_live["ok"]:
+        return {
+            "attempted": True,
+            "ok": True,
+            "status": "remote_live_state",
+            "message": "Live semantic state was refreshed from the configured remote source.",
+            "source": "configured_remote",
+            "fresh": None,
+            "github": github_live,
+            "fallback": None,
+        }
+
+    fallback = _refresh_live_semantic_state_from_aviationweather()
+    return {
+        "attempted": True,
+        "ok": bool(fallback["ok"]),
+        "status": "aviationweather_fallback" if fallback["ok"] else "live_refresh_failed",
+        "message": (
+            f"Remote live refresh was unavailable ({github_live['status']}); rebuilt from AviationWeather instead."
+            if fallback["ok"]
+            else f"Remote live refresh failed ({github_live['status']}) and AviationWeather fallback also failed."
+        ),
+        "source": "aviationweather" if fallback["ok"] else "none",
+        "fresh": fallback if fallback["ok"] else None,
+        "github": github_live,
+        "fallback": fallback,
     }
 
 
@@ -194,7 +314,7 @@ class HITLUIRequest(BaseModel):
     phase_min_support: int = 5
     live_raw_path: str | None = None
     numeric_forecast_steps: int = 6
-    numeric_forecast_mode: str = "auto"
+    numeric_forecast_mode: str = "disabled"
     numeric_model_path: str | None = None
     phase_model_mode: str = "auto"
     phase_model_path: str | None = None
@@ -242,6 +362,19 @@ def _summarize_response(result: dict[str, Any]) -> dict[str, Any]:
             "historical matching transition(s), so treat it as weak evidence."
         )
 
+    review_state = result.get("review_state") if isinstance(result.get("review_state"), dict) else {}
+    current_live_state = phase.get("current_live_state") if isinstance(phase.get("current_live_state"), dict) else {}
+    display_window_id = (
+        review_state.get("window_id")
+        or current_live_state.get("window_id")
+        or result.get("window_id")
+    )
+    route = result.get("agent_graph", {}).get("route") if isinstance(result.get("agent_graph"), dict) else None
+    if route == "feedback" and display_window_id and not str(display_window_id).startswith("live_"):
+        # Feedback does not rerun a live forecast; avoid showing the historical
+        # context window as if it were the reviewed live input window.
+        display_window_id = None
+
     return {
         "answer": answer,
         "intent": intent,
@@ -259,14 +392,14 @@ def _summarize_response(result: dict[str, Any]) -> dict[str, Any]:
         "critic_warnings": result.get("critic_warnings", []),
         "llm_requested": result.get("llm_requested"),
         "llm_available": result.get("llm_available"),
-        "window_id": result.get("window_id"),
+        "window_id": display_window_id,
         "phase_support": support,
         "phase_low_support": low_support,
         "phase_transition_source": phase.get("transition_source") or (
             candidates[0].get("transition_source") if candidates else None
         ),
         "live_token_sequence": phase.get("live_token_sequence"),
-        "current_live_state": phase.get("current_live_state"),
+        "current_live_state": current_live_state or phase.get("current_live_state"),
         "numeric_forecast": {},
         "top_phase_candidates": candidates[:5],
         "transition_analogs": analogs[:5],
@@ -297,7 +430,15 @@ def _compact_window_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-app = FastAPI(title="Standalone HITL Wind Review UI")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    global STARTUP_LIVE_SYNC
+    STARTUP_LIVE_SYNC = _refresh_live_state_with_fallback()
+    print(f"[HITL live sync] {STARTUP_LIVE_SYNC['status']}: {STARTUP_LIVE_SYNC['message']}", flush=True)
+    yield
+
+
+app = FastAPI(title="Standalone HITL Wind Review UI", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -308,8 +449,7 @@ def index() -> FileResponse:
 
 @app.get("/api/defaults")
 def defaults() -> dict[str, Any]:
-    live_sync = _sync_live_package_on_load()
-    live_semantic_refresh = _refresh_hourly_live_semantic_state()
+    live_sync = STARTUP_LIVE_SYNC or _refresh_live_state_with_fallback()
     metadata = _default_metadata_path()
     return {
         "metadata": str(metadata),
@@ -328,7 +468,7 @@ def defaults() -> dict[str, Any]:
         "phase_model_path": "",
         "phase_model_exists": False,
         "live_sync": live_sync,
-        "live_semantic_refresh": live_semantic_refresh,
+        "live_semantic_refresh": live_sync.get("fresh"),
         "llm_enabled_by_default": False,
     }
 
@@ -403,7 +543,11 @@ def run_hitl(body: HITLUIRequest) -> dict[str, Any]:
 def main() -> None:
     import uvicorn
 
-    uvicorn.run("scripts.run_hitl_ui:app", host="127.0.0.1", port=7861, reload=False)
+    parser = argparse.ArgumentParser(description="Run the controlled HITL review interface.")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=7861)
+    args = parser.parse_args()
+    uvicorn.run("scripts.run_hitl_ui:app", host=args.host, port=args.port, reload=False)
 
 
 if __name__ == "__main__":

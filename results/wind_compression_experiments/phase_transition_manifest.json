@@ -1,5 +1,5 @@
 {
-  "states_path": "C:\\Users\\Admin\\Desktop\\wind_forecasting_app\\data\\semantic\\kbos_5min_phase_semantic_states.csv",
+  "states_path": "data/semantic/kbos_5min_phase_semantic_states.csv",
   "n_tokens": 7665,
   "train_tokens": 5365,
   "val_tokens": 1150,

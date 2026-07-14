@@ -1,8 +1,8 @@
 {
   "algorithm": "HistGradientBoostingRegressor",
-  "data_path": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\data\\noaa_5min\\KAMA_2024_5min.parquet",
-  "semantic_states_path": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\data\\semantic\\kama_5min_phase_semantic_states.csv",
-  "output_dir": "C:\\Users\\Admin\\Desktop\\nf1\\wind-thesis-code-repo\\results\\kama_gradient_boosting_experiments",
+  "data_path": "data/noaa_5min/DDC_2024_5min.parquet",
+  "semantic_states_path": "data/semantic/ddc_5min_phase_semantic_states.csv",
+  "output_dir": "results/ddc_gradient_boosting_experiments",
   "seeds": [
     42,
     123
@@ -22,7 +22,9 @@
   "train_days": 30,
   "step_hours": 168,
   "final_splits": 2,
-  "tuning_splits": 2,
+  "tuning_splits": 0,
+  "configuration_protocol": "KBOS-selected configurations transferred unchanged to DDC",
+  "configuration_source": "results/kbos_gradient_boosting_experiments/gb_best_configs.csv",
   "lookback_steps_for_raw_window": 48,
   "origin_frequency": "1h",
   "designs": {
@@ -510,7 +512,9 @@
   "notes": [
     "Gradient boosting is evaluated as a tabular learner for raw-window and compressed semantic representations.",
     "The model uses direct horizon conditioning: lead step and future calendar features are added to each origin feature vector.",
+    "DDC final evaluation transfers the design/horizon configurations selected on KBOS validation folds.",
     "LLM-refined regime names are not used as model inputs; token IDs/embeddings/statistical features are non-LLM outputs."
   ],
-  "elapsed_sec": 1247.06
+  "execution_mode": "resume",
+  "last_invocation_elapsed_sec": 190.87
 }

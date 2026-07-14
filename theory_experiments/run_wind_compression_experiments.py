@@ -9,15 +9,15 @@ from typing import Any
 import pandas as pd
 
 
-PROJECT_ROOT = Path(r"C:\Users\Admin\Desktop\wind_forecasting_app")
-OUTPUT_DIR = Path(r"C:\Users\Admin\Desktop\nf1\wind_compression_experiments")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+OUTPUT_DIR = PROJECT_ROOT / "results" / "wind_compression_experiments"
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from test_ollama import load_features, rolling_backtest, set_reproducible  # noqa: E402
+from backtest_wind import load_features, rolling_backtest, set_reproducible  # noqa: E402
 
 
-DATA_PATH = PROJECT_ROOT / "data" / "wind_data.csv"
+DATA_PATH = PROJECT_ROOT / "data" / "noaa_5min" / "KBOS_2024_5min.parquet"
 HORIZONS = [1, 3, 6, 12]
 SEED = 42
 TRAIN_DAYS_TUNE = 45

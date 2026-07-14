@@ -17,7 +17,7 @@ DEFAULT_5MIN_METADATA = PROJECT_ROOT / "data" / "metadata" / "kbos_5min_phase_se
 
 
 def _default_metadata_path() -> Path:
-    return DEFAULT_HOURLY_METADATA if DEFAULT_HOURLY_METADATA.exists() else DEFAULT_5MIN_METADATA
+    return DEFAULT_5MIN_METADATA if DEFAULT_5MIN_METADATA.exists() else DEFAULT_HOURLY_METADATA
 
 
 def _parse_tokens(value: str | None) -> list[int] | None:
@@ -50,9 +50,9 @@ def main() -> None:
     parser.add_argument("--live_phase_state_path", type=str, default=None)
     parser.add_argument("--live_raw_path", type=str, default=None)
     parser.add_argument("--numeric_forecast_steps", type=int, default=6)
-    parser.add_argument("--numeric_forecast_mode", type=str, default="auto", choices=["auto", "lstm", "trend"])
+    parser.add_argument("--numeric_forecast_mode", type=str, default="disabled", choices=["disabled", "auto", "lstm", "trend"])
     parser.add_argument("--numeric_model_path", type=str, default=None)
-    parser.add_argument("--phase_model_mode", type=str, default="auto", choices=["auto", "gru", "transition"])
+    parser.add_argument("--phase_model_mode", type=str, default="transition", choices=["auto", "gru", "transition"])
     parser.add_argument("--phase_model_path", type=str, default=None)
     parser.add_argument("--disable_live_phase", action="store_true")
     parser.add_argument("--disable_rag", action="store_true")
@@ -60,7 +60,7 @@ def main() -> None:
     parser.add_argument("--agent_graph", action="store_true")
     parser.add_argument("--thread_id", type=str, default="hitl_cli_default")
     parser.add_argument("--confidence_threshold", type=float, default=0.45)
-    parser.add_argument("--feedback_action", type=str, default=None, choices=["accept", "flag", "relabel", "note", "reject"])
+    parser.add_argument("--feedback_action", type=str, default=None, choices=["accept", "flag", "note"])
     parser.add_argument("--feedback_label", type=str, default="")
     parser.add_argument("--feedback_note", type=str, default="")
     parser.add_argument("--reviewer", type=str, default="human")

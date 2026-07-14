@@ -61,6 +61,8 @@ def _resolve_path(raw_path: str | None, fallback_dirs: list[Path]) -> Path:
     if not raw_path:
         raise ValueError("Missing artifact path in semantic metadata.")
     path = Path(raw_path)
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
     if path.exists():
         return path
 

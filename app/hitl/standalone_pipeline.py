@@ -18,7 +18,7 @@ from app.phase_forecasting.semantic_phase_forecaster import PhaseForecastConfig,
 from app.semantic.retrieval.similar_regime_search import SimilarRegimeSearcher
 
 
-SUPPORTED_ACTIONS = {"accept", "flag", "relabel", "note", "reject"}
+SUPPORTED_ACTIONS = {"accept", "flag", "note"}
 
 
 def _clean_float(value: Any, default: float = 0.0) -> float:
@@ -29,6 +29,13 @@ def _clean_float(value: Any, default: float = 0.0) -> float:
     if not np.isfinite(number):
         return default
     return number
+
+
+def _clean_int(value: Any, default: int = -1) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(default)
 
 
 def _json_safe(value: Any) -> Any:
@@ -95,8 +102,6 @@ class HITLQuestionFilter:
         "subsequence",
         "probability",
         "distribution",
-        "relabel",
-        "rename",
         "flag",
         "accept",
         "approve",
@@ -144,8 +149,6 @@ class HITLQuestionFilter:
             "wrong",
             "incorrect",
             "reject",
-            "relabel",
-            "rename",
             "correct",
             "note",
         },
@@ -729,23 +732,14 @@ class StandaloneHITLPipeline:
         self.live_phase_state_path = Path(live_phase_state_path) if live_phase_state_path else (
             project_root / "data" / "live" / "semantic_states" / "KBOS_live_semantic_state.json"
         )
-        default_package_live_raw = (
-            project_root.parent
-            / "wind_live_hitl_github_package"
-            / "data"
-            / "live"
-            / "aviationweather_metar"
-            / "KBOS"
-            / "metar_live.csv"
-        )
         default_local_live_raw = project_root / "data" / "live" / "aviationweather_metar" / "KBOS" / "metar_live.csv"
         self.live_raw_path = Path(live_raw_path) if live_raw_path else (
-            default_package_live_raw if default_package_live_raw.exists() else default_local_live_raw
+            default_local_live_raw
         )
         self.numeric_forecast_steps = max(1, min(int(numeric_forecast_steps), 12))
         self.numeric_forecast_mode = str(numeric_forecast_mode or "auto").lower()
-        if self.numeric_forecast_mode not in {"auto", "lstm", "trend"}:
-            self.numeric_forecast_mode = "auto"
+        if self.numeric_forecast_mode not in {"disabled", "auto", "lstm", "trend"}:
+            self.numeric_forecast_mode = "disabled"
         self.numeric_model_path = Path(numeric_model_path) if numeric_model_path else (
             project_root / "artifacts" / "hitl_numeric_lstm" / "kbos_hourly_v1"
         )
@@ -773,21 +767,32 @@ class StandaloneHITLPipeline:
         if not current_state:
             current_state = self.context.compact_state()
         current_state["evidence_id"] = "current_state"
-        cluster_profile = dict(self.context.cluster_profile)
+        current_token = _clean_int(current_state.get("token_id"), default=self.context.token_id)
+        profile_rows = self.context.cluster_profiles[
+            pd.to_numeric(self.context.cluster_profiles["token_id"], errors="coerce") == current_token
+        ] if "token_id" in self.context.cluster_profiles.columns else pd.DataFrame()
+        cluster_profile = (
+            profile_rows.iloc[0].to_dict()
+            if not profile_rows.empty
+            else dict(self.context.cluster_profile)
+        )
         cluster_profile["evidence_id"] = "cluster_profile"
         forecast_summary = dict(self.forecast_summary)
         forecast_summary["evidence_id"] = "forecast_summary"
 
         neighbors: list[dict[str, Any]] = []
         if self.enable_rag and include_neighbors:
+            live_neighbors = self._current_live_neighbors() if self.prefer_live_phase else []
+            source_neighbors = live_neighbors or self.context.retrieve_neighbors()
             neighbors = [
                 _compact_neighbor(row, idx + 1)
-                for idx, row in enumerate(self.context.retrieve_neighbors())
+                for idx, row in enumerate(source_neighbors)
             ]
 
+        feedback_window_id = str(current_state.get("window_id") or self.context.resolved_window_id)
         feedback_rows = self.feedback_store.filter(
             artifact_type="semantic_window",
-            artifact_id=self.context.resolved_window_id,
+            artifact_id=feedback_window_id,
         )
         feedback = [
             _compact_feedback(row, idx + 1)
@@ -895,7 +900,7 @@ class StandaloneHITLPipeline:
             "answer": answer,
             "evidence": payload,
             "evidence_pack": payload,
-            "human_review_prompt": "Accept, flag, or relabel this regime if the description is not useful.",
+            "human_review_prompt": "Accept, flag, or note this regime if the description is not useful.",
         }
 
     def retrieve_similar(self, question: str, window_context: str = "current_window") -> dict[str, Any]:
@@ -910,7 +915,8 @@ class StandaloneHITLPipeline:
                 "evidence_pack": {},
                 "human_review_prompt": "Use the agent graph so session memory can resolve non-current windows.",
             }
-        neighbors = self.context.retrieve_neighbors()
+        live_neighbors = self._current_live_neighbors() if self.prefer_live_phase else []
+        neighbors = live_neighbors or self.context.retrieve_neighbors()
         payload = self.build_evidence_pack(include_neighbors=True)
         llm_payload = self._llm_json("retrieve_similar", question, payload)
         if llm_payload:
@@ -1093,6 +1099,16 @@ class StandaloneHITLPipeline:
         state["live_phase_history_path"] = str(self.live_phase_history_path)
         return state
 
+    def _current_live_neighbors(self) -> list[dict[str, Any]]:
+        """Return live-state analog windows generated by the live semantic builder."""
+
+        self._refresh_live_phase_artifacts()
+        payload = self._load_live_phase_state()
+        neighbors = payload.get("similar_historical_windows", []) if isinstance(payload, dict) else []
+        if not isinstance(neighbors, list):
+            return []
+        return [row for row in neighbors if isinstance(row, dict)]
+
     def _live_phase_artifacts_need_refresh(self) -> bool:
         if not self.live_raw_path.exists():
             return False
@@ -1274,6 +1290,8 @@ class StandaloneHITLPipeline:
         current_live_state = live_state.get("live_state", {}) if isinstance(live_state, dict) else {}
         latest_window = live_history.iloc[-1].to_dict()
         support_is_sufficient = bool(support >= max(1, int(self.phase_config.min_support)))
+        transition_model_source = "transition_fallback" if phase_model_warning else "transition_count"
+        transition_artifact_path = str(self.phase_model_path) if phase_model_warning else None
         evidence = {
             "run_name": self.context.metadata.get("run_name"),
             "metadata_path": str(self.context.metadata_path),
@@ -1288,8 +1306,8 @@ class StandaloneHITLPipeline:
             "support": int(support),
             "support_is_sufficient": support_is_sufficient,
             "similar_transition_analogs": [],
-            "forecast_model_source": "transition_fallback",
-            "model_artifact_path": str(self.phase_model_path),
+            "forecast_model_source": transition_model_source,
+            "model_artifact_path": transition_artifact_path,
             "model_warning": phase_model_warning,
             "grounding_rules": [
                 "Live phase prediction uses the latest accumulated live semantic-window token sequence.",
@@ -1360,8 +1378,8 @@ class StandaloneHITLPipeline:
                 "mode": "llm_rag_live_phase_prediction",
                 **llm_payload,
                 "phase_prediction": phase_result,
-                "forecast_model_source": "transition_fallback",
-                "model_artifact_path": str(self.phase_model_path),
+                "forecast_model_source": transition_model_source,
+                "model_artifact_path": transition_artifact_path,
                 "model_warning": phase_model_warning,
                 "evidence_pack": payload,
             }
@@ -1372,8 +1390,8 @@ class StandaloneHITLPipeline:
             "mode": "deterministic_live_phase_prediction",
             "answer": answer,
             "phase_prediction": phase_result,
-            "forecast_model_source": "transition_fallback",
-            "model_artifact_path": str(self.phase_model_path),
+            "forecast_model_source": transition_model_source,
+            "model_artifact_path": transition_artifact_path,
             "model_warning": phase_model_warning,
             "evidence": payload,
             "evidence_pack": payload,
@@ -1443,11 +1461,7 @@ class StandaloneHITLPipeline:
             return "flag", "", text
 
         if any(term in lowered for term in ("relabel", "rename", "call it", "label it")):
-            label = ""
-            match = re.search(r"(?:as|to|it)\s+['\"]?([^'\"]+?)['\"]?$", text, flags=re.IGNORECASE)
-            if match:
-                label = match.group(1).strip()
-            return "relabel", label, text
+            return "note", "", text
 
         return "note", "", text
 
@@ -1462,14 +1476,23 @@ class StandaloneHITLPipeline:
     ) -> dict[str, Any]:
         inferred_action, inferred_label, inferred_note = self._infer_feedback_from_question(question)
         action = (action or inferred_action).strip().lower()
+        if action == "reject":
+            action = "flag"
+        elif action == "relabel":
+            action = "note"
         if action not in SUPPORTED_ACTIONS:
             action = "note"
         label = label or inferred_label
         note = note or inferred_note
 
+        current_state = self._current_live_compact_state() if self.prefer_live_phase else {}
+        if not current_state:
+            current_state = self.context.compact_state()
+        artifact_id = str(current_state.get("window_id") or self.context.resolved_window_id)
+
         record = FeedbackRecord(
             artifact_type="semantic_window",
-            artifact_id=self.context.resolved_window_id,
+            artifact_id=artifact_id,
             reviewer=reviewer,
             action=action,
             label=label,
@@ -1477,14 +1500,14 @@ class StandaloneHITLPipeline:
             payload={
                 "question": question,
                 "filter": filter_decision.to_dict() if filter_decision else None,
-                "current_semantic_state": self.context.compact_state(),
+                "current_semantic_state": current_state,
                 "forecast_summary": self.forecast_summary,
             },
         )
         path = self.feedback_store.append(record)
         return {
             "mode": "feedback",
-            "answer": f"Recorded human feedback action '{action}' for {self.context.resolved_window_id}.",
+            "answer": f"Recorded human feedback action '{action}'.",
             "feedback_path": str(path),
             "feedback_record": _json_safe(asdict(record)),
         }
@@ -1527,7 +1550,7 @@ class StandaloneHITLPipeline:
                 "answer": (
                     "I cannot handle that request in this HITL pipeline. "
                     "Ask about semantic phase predictions, compressed wind states, similar historical regimes, "
-                    "or provide human feedback such as accept, flag, relabel, or note."
+                    "or provide human feedback such as accept, flag, or note."
                 ),
             }
 
@@ -1551,4 +1574,14 @@ class StandaloneHITLPipeline:
         else:
             result = self.explain_state(question)
 
-        return _json_safe({**base, **result})
+        final_result = {**base, **result}
+        phase_payload = final_result.get("phase_prediction", {})
+        phase_evidence = phase_payload.get("evidence", {}) if isinstance(phase_payload, dict) else {}
+        evidence_pack = final_result.get("evidence_pack", {})
+        current_live_state = phase_evidence.get("current_live_state", {}) if isinstance(phase_evidence, dict) else {}
+        if not current_live_state and isinstance(evidence_pack, dict):
+            current_live_state = evidence_pack.get("current_state", {})
+        live_window_id = current_live_state.get("window_id") if isinstance(current_live_state, dict) else None
+        if live_window_id and str(live_window_id).startswith("live_"):
+            final_result["window_id"] = str(live_window_id)
+        return _json_safe(final_result)

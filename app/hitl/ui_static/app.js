@@ -18,7 +18,7 @@ const FIXED_CONFIG = {
   phaseMinSupport: 5,
   phaseModelMode: "transition",
   numericSteps: 6,
-  numericMode: "auto",
+  numericMode: "disabled",
 };
 
 if (!threadId) {
@@ -56,13 +56,13 @@ function renderRows(title, rows, type) {
     .map((row) => {
       if (type === "candidate") {
         const prob = typeof row.probability === "number" ? row.probability.toFixed(3) : row.probability;
-        return `<div class="row"><strong>Token ${esc(row.token_id)}</strong><span>${esc(row.regime_name)}</span><span>p=${esc(prob)}</span><span>n=${esc(row.count)}</span></div>`;
+        return `<div class="row row--candidate"><strong>Token ${esc(row.token_id)}</strong><span>${esc(row.regime_name)}</span><span>p=${esc(prob)}</span><span>n=${esc(row.count)}</span></div>`;
       }
       if (type === "analog") {
-        return `<div class="row"><strong>${esc(row.evidence_id)}</strong><span>${esc(row.history_tokens)}</span><span>next ${esc(row.next_token_id)}</span><span>${esc(row.future_window_start)}</span></div>`;
+        return `<div class="row row--analog"><strong>${esc(row.evidence_id)}</strong><span>${esc(row.history_tokens)}</span><span>next ${esc(row.next_token_id)}</span><span>${esc(row.future_window_start)}</span></div>`;
       }
       const dist = typeof row.retrieval_distance === "number" ? row.retrieval_distance.toFixed(4) : row.retrieval_distance;
-      return `<div class="row"><strong>${esc(row.window_id)}</strong><span>${esc(row.regime_name)}</span><span>d=${esc(dist)}</span><button type="button" class="use-window" data-window="${esc(row.window_id)}">Use</button></div>`;
+      return `<div class="row row--similar"><strong title="${esc(row.window_id)}">${esc(row.window_id)}</strong><span>${esc(row.regime_name)}</span><span>d=${esc(dist)}</span></div>`;
     })
     .join("");
   return `<div class="section"><h3>${esc(title)}</h3><div class="rows">${body}</div></div>`;
@@ -72,18 +72,15 @@ function renderReviewState(reviewState) {
   if (!reviewState) return "";
   const meta = [
     pill(`status: ${reviewState.status || reviewState.action || "n/a"}`, "strong"),
+    reviewState.window_id ? pill(`forecast input window: ${reviewState.window_id}`) : null,
     reviewState.model_predicted_token !== null && reviewState.model_predicted_token !== undefined
       ? pill(`model next token: ${reviewState.model_predicted_token}`)
-      : null,
-    reviewState.human_preferred_token !== null && reviewState.human_preferred_token !== undefined
-      ? pill(`human token: ${reviewState.human_preferred_token}`)
       : null,
   ].filter(Boolean).join("");
 
   return `<div class="section">
     <h3>Human Review State</h3>
     <div class="meta">${meta}</div>
-    ${reviewState.note ? `<div class="answer">${esc(reviewState.note)}</div>` : ""}
   </div>`;
 }
 
@@ -135,9 +132,12 @@ function renderResponse(payload) {
   const s = payload.summary || {};
   const liveState = s.current_live_state || {};
   const route = s.agent_graph ? `${s.agent_graph.route}` : (s.intent || "hitl");
+  const windowLabel = s.window_id && String(s.window_id).startsWith("live_")
+    ? `live window: ${s.window_id}`
+    : null;
   const primaryMeta = [
     pill(`route: ${route}`, "strong"),
-    s.window_id ? pill(`window: ${s.window_id}`) : null,
+    windowLabel ? pill(windowLabel) : null,
     s.live_token_sequence ? pill(`live tokens: ${s.live_token_sequence.join(", ")}`) : null,
     liveState.regime_name ? pill(`live regime: ${liveState.regime_name}`) : null,
     s.llm_requested ? pill(`LLM: ${s.llm_available ? "available" : "unavailable"}`) : pill("LLM: off"),
@@ -148,16 +148,17 @@ function renderResponse(payload) {
     s.phase_low_support ? `low support: n=${s.phase_support}` : null,
     s.model_warning || null,
   ].filter(Boolean);
+  const hasSimilarTable = Array.isArray(s.similar_windows) && s.similar_windows.length > 0;
+  const hideRedundantRetrievalAnswer = s.intent === "retrieve_similar" && hasSimilarTable;
 
   return `
     <div class="meta">${primaryMeta}</div>
     ${warnings.length ? `<div class="meta">${warnings.map((item) => pill(item, "warning")).join("")}</div>` : ""}
-    <div class="answer">${esc(s.answer || "No answer returned.")}</div>
+    ${hideRedundantRetrievalAnswer ? "" : `<div class="answer">${esc(s.answer || "No answer returned.")}</div>`}
     ${renderRows("Phase candidates", s.top_phase_candidates, "candidate")}
     ${renderRows("Similar historical windows", s.similar_windows, "similar")}
     ${renderRows("Transition analogs", s.transition_analogs, "analog")}
     ${renderReviewState(s.review_state)}
-    ${s.human_review_prompt ? `<div class="section"><h3>Reviewer prompt</h3><div class="answer">${esc(s.human_review_prompt)}</div></div>` : ""}
     ${renderMemoryDebug(s.memory_rag_debug)}
     ${renderTechnicalDetails(s)}
   `;
@@ -295,15 +296,6 @@ $("loadWindows")?.addEventListener("click", loadWindows);
 $("metadata")?.addEventListener("change", loadWindows);
 $("windowSelect")?.addEventListener("change", () => {
   selectedWindowId = $("windowSelect").value || null;
-});
-
-messages.addEventListener("click", (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) return;
-  const windowId = target.dataset.window;
-  if (!windowId) return;
-  selectedWindowId = windowId;
-  addMessage("assistant", `<div class="answer">Selected historical query window: ${esc(windowId)}</div>`);
 });
 
 init().catch((error) => {

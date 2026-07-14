@@ -45,14 +45,14 @@
   ],
   "llm_labels_enabled": false,
   "output_paths": {
-    "features": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\data\\semantic\\kbos_hourly_hitl_window_features.csv",
-    "embeddings": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\data\\semantic\\kbos_hourly_hitl_embeddings.csv",
-    "token_summary": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\data\\semantic\\kbos_hourly_hitl_token_summary.csv",
-    "semantic_states": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\data\\semantic\\kbos_hourly_hitl_semantic_states.csv",
-    "cluster_profiles": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\data\\semantic\\kbos_hourly_hitl_cluster_profiles.csv",
-    "representative_examples": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\data\\semantic\\kbos_hourly_hitl_representative_examples.csv",
-    "encoder": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\artifacts\\semantic_encoder\\kbos_hourly_hitl_encoder.joblib",
-    "tokenizer": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\artifacts\\tokenizer\\kbos_hourly_hitl_tokenizer.joblib",
-    "search_index": "C:\\Users\\Admin\\Desktop\\wind_thesis_clean_codebase_20260603_070614\\artifacts\\semantic_index\\kbos_hourly_hitl_search_index.joblib"
+    "features": "data/semantic/kbos_hourly_hitl_window_features.csv",
+    "embeddings": "data/semantic/kbos_hourly_hitl_embeddings.csv",
+    "token_summary": "data/semantic/kbos_hourly_hitl_token_summary.csv",
+    "semantic_states": "data/semantic/kbos_hourly_hitl_semantic_states.csv",
+    "cluster_profiles": "data/semantic/kbos_hourly_hitl_cluster_profiles.csv",
+    "representative_examples": "data/semantic/kbos_hourly_hitl_representative_examples.csv",
+    "encoder": "artifacts/semantic_encoder/kbos_hourly_hitl_encoder.joblib",
+    "tokenizer": "artifacts/tokenizer/kbos_hourly_hitl_tokenizer.joblib",
+    "search_index": "artifacts/semantic_index/kbos_hourly_hitl_search_index.joblib"
   }
 }

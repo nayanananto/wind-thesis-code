@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 
+from app.config.paths import resolve_metadata_output_paths
 from app.semantic.labeling.llm_regime_explainer import LLMRegimeExplainer
 from app.semantic.retrieval.similar_regime_search import SimilarRegimeSearcher
 
@@ -13,7 +14,7 @@ from app.semantic.retrieval.similar_regime_search import SimilarRegimeSearcher
 def load_semantic_metadata(path: str | Path) -> dict[str, Any]:
     path = Path(path)
     with path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+        return resolve_metadata_output_paths(json.load(handle))
 
 
 def build_semantic_review_packet(
@@ -63,4 +64,3 @@ def build_semantic_review_packet(
         "retrieval_explanation": explanation,
         "llm_explanation_enabled": bool(enable_llm_explanation),
     }
-

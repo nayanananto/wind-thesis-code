@@ -26,8 +26,8 @@ except Exception as exc:  # pragma: no cover
     raise RuntimeError("TensorFlow is required for this temporary GRU ROI experiment.") from exc
 
 
-PROJECT_ROOT = Path(r"C:\Users\Admin\Desktop\wind_forecasting_app")
-OUTPUT_DIR = Path(r"C:\Users\Admin\Desktop\nf1\wind_compression_experiments")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+OUTPUT_DIR = PROJECT_ROOT / "results" / "wind_compression_experiments"
 STATES_PATH = PROJECT_ROOT / "data" / "semantic" / "kbos_5min_phase_semantic_states.csv"
 TRANSITION_FINAL_PATH = OUTPUT_DIR / "phase_transition_final_results.csv"
 SEED = 42
@@ -326,12 +326,12 @@ def main() -> None:
         "seed": SEED,
         "split": {"train_end": train_end, "val_end": val_end, "test_end": n},
     }
-    (OUTPUT_DIR / "temp_gru_phase_roi_manifest.json").write_text(
+    (OUTPUT_DIR / "gru_phase_roi_manifest.json").write_text(
         json.dumps(json_safe(manifest), indent=2),
         encoding="utf-8",
     )
 
-    live_path = OUTPUT_DIR / "temp_gru_phase_roi_tuning_live.csv"
+    live_path = OUTPUT_DIR / "gru_phase_roi_tuning_live.csv"
     if live_path.exists():
         tuning_rows = pd.read_csv(live_path).to_dict("records")
         print(f"Resuming from {len(tuning_rows)} completed validation rows.")
@@ -370,9 +370,9 @@ def main() -> None:
         best_configs.append(best)
 
     tuning = pd.DataFrame(tuning_rows)
-    tuning.to_csv(OUTPUT_DIR / "temp_gru_phase_roi_tuning_results.csv", index=False)
+    tuning.to_csv(OUTPUT_DIR / "gru_phase_roi_tuning_results.csv", index=False)
     best_df = pd.DataFrame(best_configs)
-    best_df.to_csv(OUTPUT_DIR / "temp_gru_phase_roi_best_configs.csv", index=False)
+    best_df.to_csv(OUTPUT_DIR / "gru_phase_roi_best_configs.csv", index=False)
 
     final_rows: list[dict[str, Any]] = []
     config_map = {cfg["config_id"]: cfg for cfg in configs()}
@@ -392,7 +392,7 @@ def main() -> None:
         final_rows.append(row)
         print(f"[test] h={row['horizon']} {row['config_id']} top1={row['top1_accuracy']:.4f} top3={row['top3_accuracy']:.4f}")
     final = pd.DataFrame(final_rows)
-    final.to_csv(OUTPUT_DIR / "temp_gru_phase_roi_final_results.csv", index=False)
+    final.to_csv(OUTPUT_DIR / "gru_phase_roi_final_results.csv", index=False)
 
     comparison = None
     if TRANSITION_FINAL_PATH.exists():
@@ -401,7 +401,7 @@ def main() -> None:
         comparison["top1_delta_gru_minus_transition"] = comparison["top1_accuracy_gru"] - comparison["top1_accuracy_transition"]
         comparison["top3_delta_gru_minus_transition"] = comparison["top3_accuracy_gru"] - comparison["top3_accuracy_transition"]
         comparison["macro_f1_delta_gru_minus_transition"] = comparison["macro_f1_gru"] - comparison["macro_f1_transition"]
-        comparison.to_csv(OUTPUT_DIR / "temp_gru_phase_roi_comparison.csv", index=False)
+        comparison.to_csv(OUTPUT_DIR / "gru_phase_roi_comparison.csv", index=False)
 
     report_lines = [
         "# Temporary GRU Phase ROI Report",
@@ -426,7 +426,7 @@ def main() -> None:
         ]
         report_lines.extend(["", "## GRU vs Transition Comparison", comparison[keep].to_string(index=False)])
     report_lines.extend(["", f"Elapsed seconds: {time.time() - start:.2f}"])
-    (OUTPUT_DIR / "temp_gru_phase_roi_report.md").write_text("\n".join(report_lines), encoding="utf-8")
+    (OUTPUT_DIR / "gru_phase_roi_report.md").write_text("\n".join(report_lines), encoding="utf-8")
     print(f"Saved GRU ROI files to {OUTPUT_DIR}")
 
 
