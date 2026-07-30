@@ -12,12 +12,11 @@ if str(PROJECT_ROOT) not in sys.path:
 from app.hitl.standalone_pipeline import StandaloneHITLPipeline
 
 
-DEFAULT_HOURLY_METADATA = PROJECT_ROOT / "data" / "metadata" / "kbos_hourly_hitl_semantic_build.json"
 DEFAULT_5MIN_METADATA = PROJECT_ROOT / "data" / "metadata" / "kbos_5min_phase_semantic_build.json"
 
 
 def _default_metadata_path() -> Path:
-    return DEFAULT_5MIN_METADATA if DEFAULT_5MIN_METADATA.exists() else DEFAULT_HOURLY_METADATA
+    return DEFAULT_5MIN_METADATA
 
 
 def _parse_tokens(value: str | None) -> list[int] | None:

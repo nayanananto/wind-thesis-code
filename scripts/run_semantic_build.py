@@ -13,11 +13,11 @@ from app.orchestration.semantic_workflow import run_semantic_build
 
 def main() -> None:
     parser = argparse.ArgumentParser("Build semantic wind-state embeddings and tokens.")
-    parser.add_argument("--data", type=str, default="data/wind_data.csv")
-    parser.add_argument("--window_size", type=int, default=24)
-    parser.add_argument("--step_size", type=int, default=1)
+    parser.add_argument("--data", type=str, default="data/noaa_5min/KBOS_2024_5min.parquet")
+    parser.add_argument("--window_size", type=int, default=48)
+    parser.add_argument("--step_size", type=int, default=12)
     parser.add_argument("--components", type=int, default=8)
-    parser.add_argument("--clusters", type=int, default=32)
+    parser.add_argument("--clusters", type=int, default=8)
     parser.add_argument("--run_name", type=str, default=None)
     parser.add_argument("--enable_llm_labels", action="store_true")
     args = parser.parse_args()

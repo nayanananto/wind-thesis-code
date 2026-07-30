@@ -295,6 +295,12 @@ def aggregate_results(
     manifest = {
         "data_path": DATA_PATH.relative_to(ROOT).as_posix(),
         "semantic_states_path": STATES_PATH.relative_to(ROOT).as_posix(),
+        "label_sources": sorted(
+            str(value)
+            for value in pd.read_csv(STATES_PATH, usecols=["label_source"])["label_source"]
+            .dropna()
+            .unique()
+        ),
         "seeds": SEEDS,
         "horizon_hours": HORIZON_HOURS,
         "horizon_steps": HORIZON_STEPS,
@@ -305,6 +311,7 @@ def aggregate_results(
             "Numeric horizons are converted from hours to 5-minute steps.",
             "Numeric forecasting uses prior best tuned configs and reruns final evaluation only.",
             "Phase transition and GRU use the 5-minute-derived semantic state sequence.",
+            "LLM-refined names describe fixed clusters; they do not alter token IDs or metrics.",
         ],
     }
     (OUT / "5min_two_seed_manifest.json").write_text(json.dumps(_json_safe(manifest), indent=2), encoding="utf-8")

@@ -9,7 +9,13 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 TEXT_SUFFIXES = {".csv", ".json", ".md", ".py", ".txt", ".yaml", ".yml"}
-BLOCKED_MARKERS = ("c:\\users\\", "c:/users/", "raw.githubusercontent.com/")
+DEFAULT_BLOCKED_MARKERS = (
+    "c:\\users\\",
+    "c:/users/",
+    "raw.githubusercontent.com/",
+    "github.com/",
+    "git@github.com:",
+)
 
 
 def tracked_files() -> list[Path]:
@@ -19,20 +25,20 @@ def tracked_files() -> list[Path]:
     return [ROOT / item.decode("utf-8") for item in result.stdout.split(b"\0") if item]
 
 
-def anonymity_issues(files: list[Path]) -> list[str]:
+def anonymity_issues(files: list[Path], blocked_markers: tuple[str, ...]) -> list[str]:
     issues: list[str] = []
     for path in files:
         if path.resolve() == Path(__file__).resolve():
             continue
         relative = path.relative_to(ROOT).as_posix()
         lowered_name = relative.lower()
-        if any(marker in lowered_name for marker in BLOCKED_MARKERS):
+        if any(marker in lowered_name for marker in blocked_markers):
             issues.append(relative)
             continue
         if path.suffix.lower() not in TEXT_SUFFIXES or not path.exists():
             continue
         text = path.read_text(encoding="utf-8-sig", errors="ignore").lower()
-        if any(marker in text for marker in BLOCKED_MARKERS):
+        if any(marker in text for marker in blocked_markers):
             issues.append(relative)
     return issues
 
@@ -44,10 +50,19 @@ def main() -> None:
         type=Path,
         default=ROOT.parent / "wind-thesis-anonymous-artifact.zip",
     )
+    parser.add_argument(
+        "--blocked-marker",
+        action="append",
+        default=[],
+        help="Additional case-insensitive author name, email, username, or path marker to reject.",
+    )
     args = parser.parse_args()
 
     files = tracked_files()
-    issues = anonymity_issues(files)
+    markers = DEFAULT_BLOCKED_MARKERS + tuple(
+        str(marker).lower() for marker in args.blocked_marker if str(marker).strip()
+    )
+    issues = anonymity_issues(files, markers)
     if issues:
         raise SystemExit("Identity/local-path markers remain in: " + ", ".join(issues))
 

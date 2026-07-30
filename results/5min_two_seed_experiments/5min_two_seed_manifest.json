@@ -1,6 +1,9 @@
 {
   "data_path": "data/noaa_5min/KBOS_2024_5min.parquet",
   "semantic_states_path": "data/semantic/kbos_5min_phase_semantic_states.csv",
+  "label_sources": [
+    "llm_refined"
+  ],
   "seeds": [
     42,
     123
@@ -23,6 +26,7 @@
   "notes": [
     "Numeric horizons are converted from hours to 5-minute steps.",
     "Numeric forecasting uses prior best tuned configs and reruns final evaluation only.",
-    "Phase transition and GRU use the 5-minute-derived semantic state sequence."
+    "Phase transition and GRU use the 5-minute-derived semantic state sequence.",
+    "LLM-refined names describe fixed clusters; they do not alter token IDs or metrics."
   ]
 }

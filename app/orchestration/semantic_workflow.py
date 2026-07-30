@@ -40,10 +40,10 @@ def _default_run_name() -> str:
 
 def run_semantic_build(
     raw_df: pd.DataFrame,
-    window_size: int = 24,
-    step_size: int = 1,
+    window_size: int = 48,
+    step_size: int = 12,
     n_components: int = 8,
-    n_clusters: int = 32,
+    n_clusters: int = 8,
     enable_llm_labels: bool = False,
     run_name: str | None = None,
 ) -> dict:

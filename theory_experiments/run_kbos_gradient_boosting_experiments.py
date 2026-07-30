@@ -22,7 +22,7 @@ from backtest_wind import infer_time_step, load_features, metrics, seasonal_pers
 DATA_PATH = ROOT / "data" / "noaa_5min" / "KBOS_2024_5min.parquet"
 STATES_PATH = ROOT / "data" / "semantic" / "kbos_5min_phase_semantic_states.csv"
 OUT = ROOT / "results" / "kbos_gradient_boosting_experiments"
-LSTM_RESULTS = ROOT / "results" / "kbos_llm_label_5min_two_seed_experiments"
+LSTM_RESULTS = ROOT / "results" / "5min_two_seed_experiments"
 
 SEEDS = [42, 123]
 HORIZON_HOURS = [1, 3, 6, 12]

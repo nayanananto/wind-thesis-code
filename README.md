@@ -33,6 +33,7 @@ The DDC benchmark transfers the KBOS-selected neural and gradient-boosting confi
 - `app/` - preprocessing, semantic encoding/tokenization, exact nearest-neighbor retrieval, phase forecasting, LangGraph routing, LLM grounding, memory, and feedback modules.
 - `scripts/` - semantic build, live METAR adapter, HITL CLI/UI, plotting, carbon calculation, metadata normalization, and anonymous artifact export.
 - `theory_experiments/` - two-seed continuous/phase experiments, GRU and transition studies, gradient boosting, and token-state LSTM evaluation.
+- `backtest_wind.py` - shared rolling-origin continuous-forecast engine imported by the LSTM and gradient-boosting experiment runners.
 - `data/noaa_5min/` - normalized KBOS and DDC five-minute datasets.
 - `data/semantic/` - saved window features, embeddings, token assignments, profiles, and representative examples.
 - `artifacts/` - fitted PCA encoders, tokenizers, retrieval indexes, and HITL model artifacts.
@@ -165,7 +166,15 @@ The public development repository and its Git commit history are **not anonymous
 python scripts\create_anonymous_artifact.py
 ```
 
-The script rejects known identity/local-path markers and uses `git archive`, so the ZIP contains neither `.git/` nor commit history. Upload that ZIP or a separately anonymized mirror for double-blind review; do not submit the personal GitHub repository URL.
+Add known author identifiers to the scan when preparing a double-blind artifact:
+
+```powershell
+python scripts\create_anonymous_artifact.py `
+  --blocked-marker "author-name" `
+  --blocked-marker "author-email-or-username"
+```
+
+The script rejects repository URLs, local paths, and any supplied identity markers, then uses `git archive`, so the ZIP contains neither `.git/` nor commit history. Upload that ZIP or a separately anonymized mirror for double-blind review; do not submit a personal GitHub repository URL.
 
 ## Notes
 

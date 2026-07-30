@@ -40,5 +40,6 @@
     "sample_cadence_minutes": 5,
     "token_step_samples": 12,
     "token_step_minutes": 60
-  }
+  },
+  "label_note": "LLM-refined regime names describe the fitted clusters and do not change the dimensions, embeddings, token IDs, or compression ratios."
 }

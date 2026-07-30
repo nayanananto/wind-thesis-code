@@ -116,6 +116,10 @@ def main() -> None:
             "token_step_samples": step_size,
             "token_step_minutes": step_size * 5,
         },
+        "label_note": (
+            "LLM-refined regime names describe the fitted clusters and do not change "
+            "the dimensions, embeddings, token IDs, or compression ratios."
+        ),
     }
     (OUT / "compression_metrics_5min_summary.json").write_text(
         json.dumps(summary, indent=2),

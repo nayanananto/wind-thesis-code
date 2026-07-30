@@ -741,13 +741,13 @@ class StandaloneHITLPipeline:
         if self.numeric_forecast_mode not in {"disabled", "auto", "lstm", "trend"}:
             self.numeric_forecast_mode = "disabled"
         self.numeric_model_path = Path(numeric_model_path) if numeric_model_path else (
-            project_root / "artifacts" / "hitl_numeric_lstm" / "kbos_hourly_v1"
+            project_root / "artifacts" / "hitl_numeric_lstm" / "default"
         )
         self.phase_model_mode = str(phase_model_mode or "auto").lower()
         if self.phase_model_mode not in {"auto", "gru", "transition"}:
             self.phase_model_mode = "auto"
         self.phase_model_path = Path(phase_model_path) if phase_model_path else (
-            project_root / "artifacts" / "hitl_phase_gru" / "kbos_hourly_v1"
+            project_root / "artifacts" / "hitl_phase_gru" / "default"
         )
         self.prefer_live_phase = bool(prefer_live_phase)
         self.filter = HITLQuestionFilter(threshold=confidence_threshold)

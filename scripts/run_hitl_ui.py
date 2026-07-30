@@ -25,11 +25,8 @@ from app.hitl.standalone_pipeline import StandaloneHITLPipeline  # noqa: E402
 from app.hitl.semantic_review import load_semantic_metadata  # noqa: E402
 
 
-DEFAULT_HOURLY_METADATA = PROJECT_ROOT / "data" / "metadata" / "kbos_hourly_hitl_semantic_build.json"
 DEFAULT_5MIN_METADATA = PROJECT_ROOT / "data" / "metadata" / "kbos_5min_phase_semantic_build.json"
 STATIC_DIR = PROJECT_ROOT / "app" / "hitl" / "ui_static"
-DEFAULT_NUMERIC_MODEL = PROJECT_ROOT / "artifacts" / "hitl_numeric_lstm" / "kbos_hourly_v1"
-DEFAULT_PHASE_MODEL = PROJECT_ROOT / "artifacts" / "hitl_phase_gru" / "kbos_hourly_v1"
 DEFAULT_LOCAL_LIVE_HISTORY = PROJECT_ROOT / "data" / "live" / "semantic_states" / "KBOS_live_semantic_history.csv"
 DEFAULT_LOCAL_LIVE_STATE = PROJECT_ROOT / "data" / "live" / "semantic_states" / "KBOS_live_semantic_state.json"
 DEFAULT_LOCAL_LIVE_RAW = PROJECT_ROOT / "data" / "live" / "aviationweather_metar" / "KBOS" / "metar_live.csv"
@@ -64,7 +61,7 @@ def _default_live_raw_path() -> Path:
 
 
 def _default_metadata_path() -> Path:
-    return DEFAULT_5MIN_METADATA if DEFAULT_5MIN_METADATA.exists() else DEFAULT_HOURLY_METADATA
+    return DEFAULT_5MIN_METADATA
 
 
 def _download_github_live_files(timeout: int = 20) -> dict[str, Any]:

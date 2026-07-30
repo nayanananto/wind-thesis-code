@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-07-14",
+  "updated_at": "2026-07-30",
   "project": "Interpretable Semantic Wind-Regime Forecasting",
   "final_benchmark": {
     "primary_station": "KBOS",
@@ -40,6 +40,7 @@
     "virtual environments",
     "Python caches",
     "session memory",
-    "feedback/review logs"
+    "feedback/review logs",
+    "intermediate resume checkpoints"
   ]
 }

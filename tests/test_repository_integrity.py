@@ -14,8 +14,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class RepositoryIntegrityTests(unittest.TestCase):
     def test_primary_metadata_paths_are_portable_and_resolvable(self) -> None:
-        for name in ("kbos_5min_phase_semantic_build.json", "ddc_5min_phase_semantic_build.json"):
-            path = ROOT / "data" / "metadata" / name
+        metadata_paths = sorted((ROOT / "data" / "metadata").glob("*_semantic_build.json"))
+        self.assertEqual(
+            [path.name for path in metadata_paths],
+            ["ddc_5min_phase_semantic_build.json", "kbos_5min_phase_semantic_build.json"],
+        )
+        for path in metadata_paths:
             raw = json.loads(path.read_text(encoding="utf-8"))
             for value in raw["output_paths"].values():
                 self.assertFalse(Path(value).is_absolute(), value)
@@ -64,6 +68,22 @@ class RepositoryIntegrityTests(unittest.TestCase):
             if "kama" in path.name.lower():
                 offenders.append(path.relative_to(ROOT).as_posix())
         self.assertEqual(offenders, [])
+
+    def test_intermediate_resume_checkpoints_are_not_committed(self) -> None:
+        checkpoints = sorted(
+            path.relative_to(ROOT).as_posix()
+            for path in (ROOT / "results").rglob("*_live.csv")
+        )
+        self.assertEqual(checkpoints, [])
+
+    def test_legacy_hourly_and_demo_artifacts_are_absent(self) -> None:
+        forbidden = (
+            ROOT / "data" / "metadata" / "kbos_hourly_hitl_semantic_build.json",
+            ROOT / "results" / "kbos_llm_label_5min_two_seed_experiments",
+            ROOT / "app" / "hitl" / "agent_role_map.py",
+            ROOT / "app" / "orchestration" / "inference_workflow.py",
+        )
+        self.assertEqual([str(path) for path in forbidden if path.exists()], [])
 
 
 if __name__ == "__main__":
