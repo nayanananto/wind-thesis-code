@@ -2,6 +2,10 @@
 
 Reproducibility code and saved outputs for the thesis/paper **Interpretable Semantic Wind-Regime Forecasting with a Controlled Human-in-the-Loop Layer**. The repository contains the complete offline benchmark, semantic artifacts, second-station evaluation, paper figure data, and the live HITL review interface.
 
+[![Open Live Demo](https://img.shields.io/badge/Open-Live_Demo-0A7F5A?style=for-the-badge)](https://wind-phase-review-demo.onrender.com/)
+
+**Live demo:** Explore a fixed observation snapshot through wind-regime forecasts, historical evidence, and LLM-supported explanations. The hosted service may take a short time to start after a period of inactivity.
+
 ## Method at a Glance
 
 1. Convert NOAA/ASOS observations to a consistent five-minute schema.
