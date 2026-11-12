@@ -2,9 +2,15 @@
 
 Reproducibility code and saved outputs for the thesis/paper **Interpretable Semantic Wind-Regime Forecasting with a Controlled Human-in-the-Loop Layer**. The repository contains the complete offline benchmark, semantic artifacts, second-station evaluation, paper figure data, and the live HITL review interface.
 
-[![Open Live Demo](https://img.shields.io/badge/Open-Live_Demo-0A7F5A?style=for-the-badge)](https://wind-phase-review-demo.onrender.com/)
-
-**Live demo:** Explore a fixed observation snapshot through wind-regime forecasts, historical evidence, and LLM-supported explanations. The hosted service may take a short time to start after a period of inactivity.
+<div align="center">
+  <a href="https://wind-phase-review-demo.onrender.com/">
+    <img src="https://img.shields.io/badge/LIVE%20DEMO-EXPLORE%20THE%20SYSTEM-0B7A75?style=for-the-badge&logo=render&logoColor=white&labelColor=12372A" alt="Open the live wind forecasting demo">
+  </a>
+  <br><br>
+  <strong>Explore wind-regime forecasts, historical evidence, and LLM-supported explanations.</strong>
+  <br>
+  <sub>The hosted service may take a short moment to start after a period of inactivity.</sub>
+</div>
 
 ## Method at a Glance
 
@@ -185,4 +191,4 @@ The script rejects repository URLs, local paths, and any supplied identity marke
 - Retrieval is implemented with scikit-learn's exact cosine `NearestNeighbors` index; FAISS is not required.
 - All committed metadata uses project-relative paths and resolves against the current checkout.
 - API keys, virtual environments, caches, session memory, and feedback logs are excluded from version control.
-- Code is released under the MIT License. NOAA/ASOS and AviationWeather data remain subject to their source terms and provenance.
+- NOAA/ASOS and AviationWeather data remain subject to their source terms and provenance.
