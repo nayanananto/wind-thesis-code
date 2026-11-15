@@ -2,7 +2,6 @@
 
 Reproducibility code and saved outputs for the thesis/paper **Interpretable Semantic Wind-Regime Forecasting with a Controlled Human-in-the-Loop Layer**. The repository contains the complete offline benchmark, semantic artifacts, second-station evaluation, paper figure data, and the live HITL review interface.
 
-
 <div align="center">
   <a href="https://wind-phase-review-demo.onrender.com/">
     <img src="https://img.shields.io/badge/🔴_LIVE_DEMO-EXPLORE_THE_SYSTEM-0B7A75?style=for-the-badge&logo=render&logoColor=white&labelColor=12372A" alt="Open the live wind forecasting demo">
@@ -13,6 +12,32 @@ Reproducibility code and saved outputs for the thesis/paper **Interpretable Sema
   <sub>The hosted service may take a short moment to start after a period of inactivity.</sub>
 </div>
 
+## How the HITL Interface Works
+
+<p align="center">
+  <img src="docs/workflow_diagram.png" alt="Workflow diagram showing the web server starting a LangGraph state machine that loads session memory, detects follow-ups, routes a new request to one task, builds a prompt, calls the LangChain LLM, and saves the turn" width="100%">
+</p>
+
+Each question goes through a small LangGraph state machine. The graph is controlled, not free-form: a fixed set of steps passes a shared state from one step to the next. The LLM never decides which step runs.
+
+**1. Session and memory.** The web server gives each user a session, and the session ID is used as the conversation thread. The first step loads that thread's past turns and last results from a small JSON memory file.
+
+**2. Follow-up or new request?** The graph checks whether the question refers back to the last answer, such as "why was this phase selected?". It uses simple rules: stored memory plus cue words in the question.
+
+- **Follow-up:** the graph picks the most relevant notes from memory and asks the LLM to answer using only those notes. No task runs again.
+- **New request:** a router picks one of three tasks by matching keywords in the question: predict the next wind phase, find similar past windows, or explain the current wind state.
+
+**3. Task, evidence, then explanation.** Each task runs ordinary Python code first:
+
+- **Forecaster:** predicts the next wind phase with a variable-order Markov-style transition model. It counts which phase followed the same recent regime sequence in past data, and falls back to shorter sequences when there is too little history.
+- **Retriever:** finds the nearest historical windows using cosine similarity on embeddings.
+- **Explainer:** collects the current state and its regime profile.
+
+The result is an evidence pack. It is put into a prompt and sent to the LLM through LangChain (`ChatOpenAI`). The LLM only turns the evidence into plain language. It does not choose the task or change the prediction.
+
+**4. Save and reply.** The final step stores the result and a short trace in session memory, so the next question can build on it, and returns the answer. The user can also accept, flag, or add a note to a result; these are saved in a feedback log.
+
+**LangGraph and LangChain.** LangGraph manages the flow: steps, shared state and routing. LangChain is only used as the LLM client inside those steps.
 
 ## Method at a Glance
 
@@ -51,6 +76,7 @@ The DDC benchmark transfers the KBOS-selected neural and gradient-boosting confi
 - `artifacts/` - fitted PCA encoders, tokenizers, retrieval indexes, and HITL model artifacts.
 - `results/` - final result tables and experiment manifests.
 - `figures/` - generated paper figures.
+- `docs/` - workflow diagram used in this README.
 - `tests/` - repository-integrity and portability checks.
 - `DATA_CARD.md` - station ranges, provenance notes, live-data distinction, and use limitations.
 
@@ -76,68 +102,33 @@ python -m compileall -q app scripts theory_experiments backtest_wind.py
 
 The committed CSV/JSON files already contain the reported outputs. Full neural runs can take substantial CPU time.
 
-Primary KBOS two-seed benchmark and compression metrics:
-
 ```powershell
+# Primary KBOS two-seed benchmark and compression metrics
 python theory_experiments\run_5min_two_seed_final_experiments.py
 python theory_experiments\compute_compression_metrics.py
-```
 
-DDC robustness benchmark:
-
-```powershell
+# DDC robustness benchmark
 python theory_experiments\run_ddc_5min_two_seed_experiments.py
 python theory_experiments\compute_ddc_compression_metrics.py
-```
 
-Gradient-boosting representation probes:
-
-```powershell
+# Gradient-boosting representation probes
 python theory_experiments\run_kbos_gradient_boosting_experiments.py
 python theory_experiments\run_ddc_gradient_boosting_experiments.py
-```
 
-Regime-token-state LSTM extension used in the representation comparison:
-
-```powershell
+# Regime-token-state LSTM extension
 python theory_experiments\run_token_state_lstm_experiments.py
-```
 
-Rebuild paper artifacts from saved results:
-
-```powershell
+# Rebuild paper artifacts from saved results
 python scripts\plot_phase_accuracy.py
 python scripts\calculate_carbon_footprint.py
 ```
 
 ## Canonical Result Files
 
-Primary KBOS:
-
-- `results/5min_two_seed_experiments/numeric_5min_two_seed_summary.csv`
-- `results/5min_two_seed_experiments/phase_transition_5min_two_seed_summary.csv`
-- `results/5min_two_seed_experiments/gru_phase_5min_two_seed_summary.csv`
-- `results/5min_two_seed_experiments/compression_metrics_5min.csv`
-- `results/kbos_gradient_boosting_experiments/gb_summary.csv`
-
-Second-station DDC:
-
-- `results/ddc_5min_two_seed_experiments/numeric_5min_two_seed_summary.csv`
-- `results/ddc_5min_two_seed_experiments/phase_transition_5min_two_seed_summary.csv`
-- `results/ddc_5min_two_seed_experiments/gru_phase_5min_two_seed_summary.csv`
-- `results/ddc_5min_two_seed_experiments/compression_metrics_5min.csv`
-- `results/ddc_gradient_boosting_experiments/gb_summary.csv`
-
-Cross-station token-state LSTM:
-
-- `results/token_state_lstm_experiments/token_state_lstm_summary.csv`
-- `results/token_state_lstm_experiments/token_state_lstm_metadata.json`
-
-Paper-supporting artifacts:
-
-- `figures/acc_horizon.png`
-- `figures/acc_horizon.pdf`
-- `results/carbon_footprint.csv`
+- **KBOS:** `results/5min_two_seed_experiments/` (`numeric_5min_two_seed_summary.csv`, `phase_transition_5min_two_seed_summary.csv`, `gru_phase_5min_two_seed_summary.csv`, `compression_metrics_5min.csv`) and `results/kbos_gradient_boosting_experiments/gb_summary.csv`.
+- **DDC:** the same four file names under `results/ddc_5min_two_seed_experiments/`, plus `results/ddc_gradient_boosting_experiments/gb_summary.csv`.
+- **Token-state LSTM:** `results/token_state_lstm_experiments/` (`token_state_lstm_summary.csv`, `token_state_lstm_metadata.json`).
+- **Paper artifacts:** `figures/acc_horizon.png`, `figures/acc_horizon.pdf`, `results/carbon_footprint.csv`.
 
 ## Run the HITL Interface
 
@@ -172,13 +163,7 @@ python scripts\run_semantic_build.py `
 
 ## Anonymous Submission Artifact
 
-The public development repository and its Git commit history are **not anonymous**. After committing final changes, create a history-free submission ZIP:
-
-```powershell
-python scripts\create_anonymous_artifact.py
-```
-
-Add known author identifiers to the scan when preparing a double-blind artifact:
+The public development repository and its Git commit history are **not anonymous**. After committing final changes, create a history-free submission ZIP, optionally adding known author identifiers to the scan:
 
 ```powershell
 python scripts\create_anonymous_artifact.py `
