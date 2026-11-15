@@ -15,7 +15,7 @@ Reproducibility code and saved outputs for the thesis/paper **Interpretable Sema
 ## How the HITL Interface Works
 
 <p align="center">
-  <img src="docs/workflow_diagram.png" alt="Workflow diagram showing the web server starting a LangGraph state machine that loads session memory, detects follow-ups, routes a new request to one task, builds a prompt, calls the LangChain LLM, and saves the turn" width="100%">
+  <img src="figures/workflow_diagram.png" alt="Workflow diagram showing the web server starting a LangGraph state machine that loads session memory, detects follow-ups, routes a new request to one task, builds a prompt, calls the LangChain LLM, and saves the turn" width="100%">
 </p>
 
 Each question goes through a small LangGraph state machine. The graph is controlled, not free-form: a fixed set of steps passes a shared state from one step to the next. The LLM never decides which step runs.
