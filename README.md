@@ -25,7 +25,7 @@ Each question goes through a small LangGraph state machine. The graph is control
 **2. Follow-up or new request?** The graph checks whether the question refers back to the last answer, such as "why was this phase selected?". It uses simple rules: stored memory plus cue words in the question.
 
 - **Follow-up:** the graph picks the most relevant notes from memory and asks the LLM to answer using only those notes. No task runs again.
-- **New request:** a router picks one of three tasks by matching keywords in the question: predict the next wind phase, find similar past windows, or explain the current wind state.
+- **New request:** a router picks one of three tasks based on LLM's decision and keyword matching as fallback. Sample questions are: predict the next wind phase, find similar past windows, or explain the current wind state.
 
 **3. Task, evidence, then explanation.** Each task runs ordinary Python code first:
 
