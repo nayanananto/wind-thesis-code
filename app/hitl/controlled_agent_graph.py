@@ -9,6 +9,9 @@ from typing import Any, Literal, TypedDict
 import pandas as pd
 from langgraph.graph import END, StateGraph
 
+from app.hitl.messages import UNSUPPORTED_REQUEST_ANSWER
+from app.llm.semantic_reasoner import is_plain_text_answer
+
 
 RouteName = Literal[
     "out_of_scope",
@@ -17,8 +20,24 @@ RouteName = Literal[
     "phase_prediction",
     "explain_state",
     "memory_followup",
+    "compound_request",
 ]
-ExecutionMode = Literal["normal_tool_routing", "memory_only"]
+RequestMode = Literal["single", "compound"]
+PlanRoute = Literal["execute", "out_of_scope"]
+FollowupSource = Literal["current_turn", "session_memory"]
+CompoundTask = Literal[
+    "retrieve_similar",
+    "phase_prediction",
+    "explain_state",
+    "followup_analysis",
+]
+FollowupOperation = Literal[
+    "closest_window",
+    "farthest_window",
+    "explain_retrieval",
+    "phase_rationale",
+    "phase_evidence_strength",
+]
 
 
 class HITLAgentState(TypedDict, total=False):
@@ -31,7 +50,14 @@ class HITLAgentState(TypedDict, total=False):
     reviewer: str
     memory: dict[str, Any]
     rewrite: dict[str, Any]
-    execution_mode: ExecutionMode
+    followup_source: FollowupSource
+    request_mode: RequestMode
+    plan_route: PlanRoute
+    task_plan: list[CompoundTask]
+    pending_tasks: list[CompoundTask]
+    completed_tasks: list[CompoundTask]
+    compound_results: dict[str, dict[str, Any]]
+    followup_operations: list[FollowupOperation]
     target_predicted_numeric_window: bool
     target_window_operation: str
     filter_decision: Any
@@ -103,7 +129,8 @@ class ControlledHITLAgentGraph:
 
     def __init__(self, pipeline: Any):
         self.pipeline = pipeline
-        memory_path = pipeline.context.metadata_path.parent.parent / "hitl_session_memory.json"
+        # The deployment adapter gives each signed session its own feedback directory.
+        memory_path = pipeline.feedback_store.path.parent / "session_memory.json"
         self.memory_store = HITLSessionMemoryStore(memory_path)
         self.graph = self._build_graph()
 
@@ -111,45 +138,34 @@ class ControlledHITLAgentGraph:
         builder = StateGraph(HITLAgentState)
         builder.add_node("load_session_memory", self._load_session_memory)
         builder.add_node("rewrite_request", self._rewrite_request)
-        builder.add_node("answer_from_memory", self._answer_from_memory)
-        builder.add_node("relevance_check", self._relevance_check)
-        builder.add_node("run_feedback", self._run_feedback)
-        builder.add_node("run_retrieval", self._run_retrieval)
-        builder.add_node("run_phase_forecast", self._run_phase_forecast)
-        builder.add_node("run_state_explanation", self._run_state_explanation)
+        builder.add_node("plan_request", self._plan_request)
+        builder.add_node("task_controller", self._task_controller)
+        builder.add_node("controlled_tool_node", self._controlled_tool_node)
+        builder.add_node("synthesize_response", self._synthesize_response)
         builder.add_node("critic_check", self._critic_check)
         builder.add_node("finalize", self._finalize)
 
         builder.set_entry_point("load_session_memory")
         builder.add_edge("load_session_memory", "rewrite_request")
+        builder.add_edge("rewrite_request", "plan_request")
         builder.add_conditional_edges(
-            "rewrite_request",
-            self._route_after_rewrite,
+            "plan_request",
+            self._route_after_plan,
             {
-                "memory_only": "answer_from_memory",
-                "normal_tool_routing": "relevance_check",
-            },
-        )
-        builder.add_conditional_edges(
-            "relevance_check",
-            self._route_after_relevance,
-            {
+                "execute": "task_controller",
                 "out_of_scope": "finalize",
-                "feedback": "run_feedback",
-                "retrieve_similar": "run_retrieval",
-                "phase_prediction": "run_phase_forecast",
-                "explain_state": "run_state_explanation",
-                "memory_followup": "answer_from_memory",
             },
         )
-        builder.add_edge("answer_from_memory", "critic_check")
-        for node in (
-            "run_feedback",
-            "run_retrieval",
-            "run_phase_forecast",
-            "run_state_explanation",
-        ):
-            builder.add_edge(node, "critic_check")
+        builder.add_conditional_edges(
+            "task_controller",
+            self._route_after_task_controller,
+            {
+                "run_tool": "controlled_tool_node",
+                "synthesize": "synthesize_response",
+            },
+        )
+        builder.add_edge("controlled_tool_node", "task_controller")
+        builder.add_edge("synthesize_response", "critic_check")
         builder.add_edge("critic_check", "finalize")
         builder.add_edge("finalize", END)
         return builder.compile()
@@ -349,7 +365,7 @@ class ControlledHITLAgentGraph:
         }
         update: dict[str, Any] = {
             "effective_question": question,
-            "execution_mode": "normal_tool_routing",
+            "followup_source": "current_turn",
             "rewrite": rewrite,
         }
 
@@ -398,31 +414,651 @@ class ControlledHITLAgentGraph:
             rewrite = {
                 "original_question": question,
                 "rewritten_question": rewritten,
-                "execution_mode": "memory_only",
+                "execution_mode": "controlled_followup",
                 "reason": "Detected a conversation-relevant follow-up over stored HITL evidence.",
             }
             update.update(
                 {
                     "effective_question": rewritten,
-                    "execution_mode": "memory_only",
+                    "followup_source": "session_memory",
                     "rewrite": rewrite,
                     "route": "memory_followup",
                 }
             )
 
-        return {**state, **update, "trace": self._append_trace(state, f"rewrite_request:{rewrite['execution_mode']}")}
+        return {
+            **state,
+            **update,
+            "trace": self._append_trace(state, f"rewrite_request:{update['followup_source']}"),
+        }
 
     @staticmethod
-    def _route_after_rewrite(state: HITLAgentState) -> ExecutionMode:
-        return state.get("execution_mode", "normal_tool_routing")
+    def _detect_core_tasks(question: str) -> list[CompoundTask]:
+        """Return explicit scientific core tasks in the order requested."""
+        patterns: dict[CompoundTask, tuple[str, ...]] = {
+            "phase_prediction": (
+                r"\b(?:predict|forecast)\s+(?:the\s+)?next\s+(?:wind\s+)?(?:phase|regime|state)\b",
+                r"\b(?:predict|forecast)\s+(?:the\s+)?(?:wind\s+)?(?:phase|regime)\b",
+                r"\bwhat\s+(?:phase|regime)\s+(?:comes|is)\s+next\b",
+            ),
+            "explain_state": (
+                r"\b(?:explain|describe|summari[sz]e)\s+(?:the\s+)?(?:current|live|present)\s+(?:wind\s+)?(?:state|condition|conditions|window|regime)\b",
+                r"\bwhat(?:'s|\s+is)\s+(?:the\s+)?(?:current|live|present)\s+(?:wind\s+)?(?:state|condition|conditions|regime)\b",
+                r"\bwhy\s+is\s+(?:the\s+)?(?:current|live|present)\s+(?:wind\s+)?(?:state|condition|regime)\b",
+            ),
+            "retrieve_similar": (
+                r"\b(?:retrieve|find|show|get)\s+(?:the\s+)?(?:most\s+)?(?:similar|nearest|closest|matching)\s+(?:historical\s+|past\s+)?(?:window|windows|conditions|cases)\b",
+                r"\b(?:retrieve|find|show|get)\s+(?:the\s+)?(?:historical|past)\s+(?:window|windows|conditions|cases|matches)\b",
+                r"\b(?:similar|nearest|closest|matching)\s+(?:historical\s+|past\s+)?(?:window|windows|conditions|cases)\b",
+            ),
+        }
+        lowered = question.lower()
+        earliest: dict[CompoundTask, int] = {}
+        for task, task_patterns in patterns.items():
+            starts = [
+                match.start()
+                for pattern in task_patterns
+                for match in re.finditer(pattern, lowered)
+            ]
+            if starts:
+                earliest[task] = min(starts)
+        ordered = [task for task, _ in sorted(earliest.items(), key=lambda item: item[1])]
+        return ordered[:3]
 
-    def _answer_from_memory(self, state: HITLAgentState) -> HITLAgentState:
+    @classmethod
+    def _detect_compound_tasks(cls, question: str) -> list[CompoundTask]:
+        """Return multiple explicit core tasks; retained for focused tests."""
+        tasks = cls._detect_core_tasks(question)
+        return tasks if len(tasks) >= 2 else []
+
+    @staticmethod
+    def _detect_followup_operations(question: str) -> list[FollowupOperation]:
+        """Detect analyses that depend on a forecast or retrieval result."""
+        lowered = question.lower()
+        operations: list[FollowupOperation] = []
+        if re.search(r"\b(?:closest|nearest|most\s+similar)\b", lowered):
+            operations.append("closest_window")
+        if re.search(r"\b(?:farthest|furthest|least\s+similar|most\s+different)\b", lowered):
+            operations.append("farthest_window")
+        if re.search(
+            r"\b(?:explain|describe|summari[sz]e)\s+(?:the\s+)?(?:retrieved|retrieval|historical|similar)\s+(?:data|windows?|results?)\b",
+            lowered,
+        ) or re.search(
+            r"\b(?:explain|describe|summari[sz]e)\s+(?:the\s+)?data\s+in\s+(?:the\s+)?retrieved\s+(?:historical\s+)?windows?\b",
+            lowered,
+        ):
+            operations.append("explain_retrieval")
+        if re.search(r"\bwhy\b", lowered) and re.search(
+            r"\b(?:phase|regime|candidate|selected|chosen|chose|alternative)\b",
+            lowered,
+        ):
+            operations.append("phase_rationale")
+        if re.search(r"\b(?:how\s+strong|confidence|supporting\s+evidence|evidence\s+strength)\b", lowered) and re.search(
+            r"\b(?:phase|forecast|prediction|evidence)\b",
+            lowered,
+        ):
+            operations.append("phase_evidence_strength")
+        return operations
+
+    def _plan_request(self, state: HITLAgentState) -> HITLAgentState:
+        question = state.get("effective_question") or state["question"]
+        if state.get("followup_source") == "session_memory":
+            task_plan: list[CompoundTask] = ["followup_analysis"]
+            filter_decision = {
+                "intent": "memory_followup",
+                "confidence": 1.0,
+                "allowed": True,
+                "reason": "Resolved the request as a follow-up over stored session evidence.",
+                "matched_terms": ["session_memory"],
+            }
+            router = {
+                "source": "session_memory_resolver",
+                "intent": "memory_followup",
+                "task_plan": task_plan,
+                "llm_router_attempted": False,
+                "llm_router_used": False,
+                "reason": filter_decision["reason"],
+            }
+            return {
+                **state,
+                "request_mode": "single",
+                "plan_route": "execute",
+                "task_plan": task_plan,
+                "pending_tasks": list(task_plan),
+                "completed_tasks": [],
+                "compound_results": {},
+                "followup_operations": [],
+                "filter_decision": filter_decision,
+                "route": "memory_followup",
+                "router": router,
+                "trace": self._append_trace(state, "plan_request:single:followup_analysis"),
+            }
+
+        words = set(re.findall(r"[a-z0-9_]+", question.lower()))
+        feedback_terms = {"accept", "approve", "flag", "reject", "incorrect", "wrong", "relabel"}
+        task_plan: list[CompoundTask] = []
+        followup_operations: list[FollowupOperation] = []
+        if not state.get("feedback_action") and not words.intersection(feedback_terms):
+            core_tasks = self._detect_core_tasks(question)
+            detected_followups = self._detect_followup_operations(question)
+            retrieval_followups = {
+                "closest_window",
+                "farthest_window",
+                "explain_retrieval",
+            }
+            phase_followups = {"phase_rationale", "phase_evidence_strength"}
+            followup_operations = [
+                operation
+                for operation in detected_followups
+                if (
+                    operation in retrieval_followups and "retrieve_similar" in core_tasks
+                ) or (
+                    operation in phase_followups and "phase_prediction" in core_tasks
+                )
+            ]
+            if len(core_tasks) >= 2 or followup_operations:
+                task_plan = list(core_tasks)
+                if followup_operations:
+                    task_plan.append("followup_analysis")
+
+        if not task_plan:
+            routed = self._relevance_check(state)
+            route = routed.get("route", "out_of_scope")
+            if route in {"feedback", "out_of_scope"}:
+                return {
+                    **routed,
+                    "route": "out_of_scope",
+                    "request_mode": "single",
+                    "plan_route": "out_of_scope",
+                    "task_plan": [],
+                    "pending_tasks": [],
+                    "completed_tasks": [],
+                    "compound_results": {},
+                    "followup_operations": [],
+                    "trace": self._append_trace(routed, "plan_request:out_of_scope"),
+                }
+            task_plan = [route]
+            return {
+                **routed,
+                "request_mode": "single",
+                "plan_route": "execute",
+                "task_plan": list(task_plan),
+                "pending_tasks": list(task_plan),
+                "completed_tasks": [],
+                "compound_results": {},
+                "followup_operations": [],
+                "trace": self._append_trace(routed, f"plan_request:single:{route}"),
+            }
+
+        filter_decision = {
+            "intent": "compound_request",
+            "confidence": 1.0,
+            "allowed": True,
+            "reason": "Detected multiple explicit wind-review tasks in one request.",
+            "matched_terms": list(task_plan),
+        }
+        router = {
+            "source": "deterministic_compound_planner",
+            "intent": "compound_request",
+            "task_plan": list(task_plan),
+            "llm_router_attempted": False,
+            "llm_router_used": False,
+            "reason": filter_decision["reason"],
+        }
+        return {
+            **state,
+            "request_mode": "compound",
+            "plan_route": "execute",
+            "task_plan": list(task_plan),
+            "pending_tasks": list(task_plan),
+            "completed_tasks": [],
+            "compound_results": {},
+            "followup_operations": followup_operations,
+            "filter_decision": filter_decision,
+            "route": "compound_request",
+            "router": router,
+            "trace": self._append_trace(state, f"plan_request:compound:{','.join(task_plan)}"),
+        }
+
+    @staticmethod
+    def _route_after_plan(state: HITLAgentState) -> PlanRoute:
+        return state.get("plan_route", "out_of_scope")
+
+    def _task_controller(self, state: HITLAgentState) -> HITLAgentState:
+        pending = list(state.get("pending_tasks") or [])
+        next_task = pending[0] if pending else "done"
+        return {
+            **state,
+            "trace": self._append_trace(state, f"task_controller:{next_task}"),
+        }
+
+    @staticmethod
+    def _route_after_task_controller(state: HITLAgentState) -> Literal["run_tool", "synthesize"]:
+        return "run_tool" if state.get("pending_tasks") else "synthesize"
+
+    def _store_task_result(
+        self,
+        state: HITLAgentState,
+        task: CompoundTask,
+        result: dict[str, Any],
+    ) -> HITLAgentState:
+        pending = list(state.get("pending_tasks") or [])
+        if not pending or pending[0] != task:
+            raise RuntimeError(f"Task controller expected {task}, but pending tasks were {pending}.")
+        pending.pop(0)
+        compound_results = dict(state.get("compound_results") or {})
+        compound_results[task] = result
+        completed = [*(state.get("completed_tasks") or []), task]
+        return {
+            **state,
+            "pending_tasks": pending,
+            "completed_tasks": completed,
+            "compound_results": compound_results,
+            "trace": self._append_trace(state, f"controlled_tool_node:{task}"),
+        }
+
+    def _controlled_tool_node(self, state: HITLAgentState) -> HITLAgentState:
+        pending = list(state.get("pending_tasks") or [])
+        if not pending:
+            return state
+        task = pending[0]
+        if task == "followup_analysis":
+            if state.get("followup_source") == "session_memory":
+                result = self._analyze_session_memory_followup(state)["result"]
+            else:
+                result = self._analyze_current_turn_followup(state)
+            return self._store_task_result(state, task, result)
+
+        tool_registry = {
+            "phase_prediction": lambda: self.pipeline.predict_phase("Predict the next wind phase."),
+            "retrieve_similar": lambda: self.pipeline.retrieve_similar(
+                "Retrieve similar historical wind windows."
+            ),
+            "explain_state": lambda: self.pipeline.explain_state(
+                "Explain the current wind state.",
+                window_context="current_window",
+            ),
+        }
+        runner = tool_registry.get(task)
+        if runner is None:
+            raise RuntimeError(f"No controlled tool is registered for task {task}.")
+
+        # Tools collect structured evidence only. The final synthesis node makes
+        # the request's single LLM call for both single and compound requests.
+        llm_enabled = self.pipeline.enable_llm
+        self.pipeline.enable_llm = False
+        try:
+            result = runner()
+        finally:
+            self.pipeline.enable_llm = llm_enabled
+        return self._store_task_result(state, task, result)
+
+    @staticmethod
+    def _retrieval_rows_from_result(result: dict[str, Any]) -> list[dict[str, Any]]:
+        rows = result.get("similar_windows")
+        if not isinstance(rows, list):
+            evidence_pack = result.get("evidence_pack")
+            if not isinstance(evidence_pack, dict):
+                evidence_pack = result.get("evidence") if isinstance(result.get("evidence"), dict) else {}
+            rows = evidence_pack.get("similar_windows")
+        return [row for row in (rows or []) if isinstance(row, dict)]
+
+    @staticmethod
+    def _phase_evidence_from_result(result: dict[str, Any]) -> dict[str, Any]:
+        phase_payload = result.get("phase_prediction")
+        if isinstance(phase_payload, dict) and isinstance(phase_payload.get("evidence"), dict):
+            return phase_payload["evidence"]
+        evidence_pack = result.get("evidence_pack")
+        if not isinstance(evidence_pack, dict):
+            evidence_pack = result.get("evidence") if isinstance(result.get("evidence"), dict) else {}
+        phase_evidence = evidence_pack.get("live_phase_prediction") or evidence_pack.get("phase_prediction") or {}
+        return phase_evidence if isinstance(phase_evidence, dict) else {}
+
+    @staticmethod
+    def _compact_followup_window(row: dict[str, Any]) -> dict[str, Any]:
+        return _json_safe({
+            "evidence_id": row.get("evidence_id"),
+            "window_id": row.get("window_id"),
+            "window_start": row.get("window_start"),
+            "window_end": row.get("window_end"),
+            "regime_name": row.get("regime_name"),
+            "retrieval_distance": row.get("retrieval_distance"),
+            "wind_speed_mean": row.get("wind_speed_mean"),
+        })
+
+    def _analyze_current_turn_followup(self, state: HITLAgentState) -> dict[str, Any]:
+        operations = list(state.get("followup_operations") or [])
+        results = dict(state.get("compound_results") or {})
+        analysis: dict[str, Any] = {}
+        sections: list[str] = []
+
+        retrieval_operations = {
+            "closest_window",
+            "farthest_window",
+            "explain_retrieval",
+        }
+        if retrieval_operations.intersection(operations):
+            rows = self._retrieval_rows_from_result(results.get("retrieve_similar", {}))
+            ranked: list[tuple[float, dict[str, Any]]] = []
+            for row in rows:
+                try:
+                    ranked.append((float(row.get("retrieval_distance")), row))
+                except (TypeError, ValueError):
+                    continue
+            comparison: dict[str, Any] = {"returned_windows": len(rows)}
+            if ranked and "closest_window" in operations:
+                closest = min(ranked, key=lambda item: item[0])[1]
+                comparison["closest_window"] = self._compact_followup_window(closest)
+                sections.append(
+                    "The closest retrieved window is "
+                    f"{closest.get('window_id') or 'the first ranked match'} "
+                    f"(d={float(closest.get('retrieval_distance')):.4f})."
+                )
+            if ranked and "farthest_window" in operations:
+                farthest = max(ranked, key=lambda item: item[0])[1]
+                comparison["farthest_window"] = self._compact_followup_window(farthest)
+                sections.append(
+                    "The farthest window within the retrieved set is "
+                    f"{farthest.get('window_id') or 'the last ranked match'} "
+                    f"(d={float(farthest.get('retrieval_distance')):.4f})."
+                )
+            if ranked and {"closest_window", "farthest_window"}.intersection(operations):
+                sections.append("A smaller retrieval distance d means a closer match in the stored representation.")
+            if "explain_retrieval" in operations:
+                sections.append(
+                    f"The retrieval returned {len(rows)} historical window(s). Each row is a past observation "
+                    "window ranked by its distance from the current wind representation."
+                )
+            analysis["retrieval_analysis"] = comparison
+
+        phase_operations = {"phase_rationale", "phase_evidence_strength"}
+        if phase_operations.intersection(operations):
+            phase = self._phase_evidence_from_result(results.get("phase_prediction", {}))
+            candidates = [
+                row for row in (phase.get("candidate_next_phases") or [])
+                if isinstance(row, dict)
+            ]
+            phase_analysis: dict[str, Any] = {
+                "live_token_sequence": phase.get("live_token_sequence") or phase.get("token_sequence"),
+                "support": phase.get("support"),
+                "minimum_support": phase.get("minimum_support"),
+                "candidate_next_phases": candidates[:5],
+            }
+            if candidates and "phase_rationale" in operations:
+                top = candidates[0]
+                probability = float(top.get("probability") or 0.0)
+                count = top.get("count")
+                support = top.get("support") or phase.get("support")
+                evidence_text = (
+                    f" It appeared in {count} of {support} matching transitions."
+                    if count is not None and support
+                    else ""
+                )
+                sections.append(
+                    f"The forecast ranked token {top.get('token_id')} ({top.get('regime_name')}) first because "
+                    f"it had the highest stored transition probability ({probability:.3f}).{evidence_text}"
+                )
+                alternatives = candidates[1:3]
+                if alternatives:
+                    sections.append(
+                        "The next alternatives were "
+                        + ", ".join(
+                            f"token {row.get('token_id')} ({float(row.get('probability') or 0.0):.3f})"
+                            for row in alternatives
+                        )
+                        + "."
+                    )
+            if "phase_evidence_strength" in operations:
+                support = int(phase.get("support") or 0)
+                minimum = int(phase.get("minimum_support") or 0)
+                if minimum:
+                    comparison = "meets" if support >= minimum else "does not meet"
+                    sections.append(
+                        f"The forecast has support from {support} matching transition(s), which {comparison} "
+                        f"the configured minimum of {minimum}."
+                    )
+                else:
+                    sections.append(f"The forecast has support from {support} matching transition(s).")
+            analysis["phase_analysis"] = phase_analysis
+
+        answer = " ".join(sections).strip() or UNSUPPORTED_REQUEST_ANSWER
+        return {
+            "mode": "followup_analysis",
+            "explanation_mode": "working_memory_analysis",
+            "answer": answer,
+            "followup_operations": operations,
+            "followup_analysis": analysis,
+            "evidence": [f"current_turn:{task}" for task in state.get("completed_tasks", [])],
+            "evidence_pack": {"followup_analysis": analysis},
+        }
+
+    @staticmethod
+    def _compact_compound_result(result: dict[str, Any]) -> dict[str, Any]:
+        evidence_pack = result.get("evidence_pack")
+        if not isinstance(evidence_pack, dict):
+            evidence_pack = result.get("evidence") if isinstance(result.get("evidence"), dict) else {}
+        phase_payload = result.get("phase_prediction") if isinstance(result.get("phase_prediction"), dict) else {}
+        phase_evidence = phase_payload.get("evidence") if isinstance(phase_payload.get("evidence"), dict) else {}
+        compact: dict[str, Any] = {
+            "mode": result.get("mode"),
+            "answer": result.get("answer"),
+        }
+        if phase_evidence:
+            compact["phase_prediction"] = {
+                "live_token_sequence": phase_evidence.get("live_token_sequence"),
+                "current_live_state": phase_evidence.get("current_live_state"),
+                "candidate_next_phases": (phase_evidence.get("candidate_next_phases") or [])[:5],
+                "support": phase_evidence.get("support"),
+                "minimum_support": phase_evidence.get("minimum_support"),
+                "similar_transition_analogs": (phase_evidence.get("similar_transition_analogs") or [])[:5],
+            }
+        current_state = evidence_pack.get("current_state")
+        if isinstance(current_state, dict) and current_state:
+            compact["current_state"] = current_state
+        similar = result.get("similar_windows") or evidence_pack.get("similar_windows") or []
+        if isinstance(similar, list) and similar:
+            compact["similar_windows"] = similar[:5]
+        followup_analysis = result.get("followup_analysis")
+        if isinstance(followup_analysis, dict) and followup_analysis:
+            compact["followup_analysis"] = followup_analysis
+        return _json_safe(compact)
+
+    def _llm_compound_answer(
+        self,
+        question: str,
+        task_plan: list[CompoundTask],
+        compact_results: dict[str, dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        if not self.pipeline.enable_llm or not self.pipeline.llm_available or not self.pipeline.reasoner:
+            return None
+        evidence_ids = [f"compound:{task}" for task in task_plan]
+        prompt = (
+            "You are the final answer node in a controlled wind-review workflow.\n"
+            "Several approved tools have already run for one user message. Answer every requested part using only "
+            "the supplied tool_results. Do not claim that any other tool ran. Do not invent wind values, phases, "
+            "probabilities, or historical matches. Keep the answer clear and organized in the same language requested "
+            "by the user.\n"
+            f"If the evidence cannot answer the request, set answer to exactly: {UNSUPPORTED_REQUEST_ANSWER}\n"
+            "Return only valid JSON with keys: answer, evidence, human_review_prompt. answer must be a nonempty string. "
+            "evidence must be a list containing only the supplied evidence IDs.\n\n"
+            f"User question: {question}\n"
+            f"Task order: {json.dumps(task_plan, ensure_ascii=False)}\n"
+            f"Evidence IDs: {json.dumps(evidence_ids, ensure_ascii=False)}\n"
+            f"Tool results: {json.dumps(_json_safe(compact_results), ensure_ascii=False)}\n"
+        )
+        if hasattr(self.pipeline.reasoner, "invoke_json_with_raw"):
+            payload, raw_text = self.pipeline.reasoner.invoke_json_with_raw(prompt)
+        else:
+            payload = self.pipeline.reasoner.invoke_json(prompt)
+            raw_text = None
+        if not isinstance(payload, dict):
+            if is_plain_text_answer(raw_text):
+                return {
+                    "answer": str(raw_text).strip(),
+                    "evidence": evidence_ids,
+                    "human_review_prompt": "Check that this combined answer matches each tool result.",
+                    "llm_output_format": "raw_text",
+                }
+            return None
+        answer = payload.get("answer")
+        if not isinstance(answer, str) or not answer.strip():
+            return None
+        valid_ids = set(evidence_ids)
+        evidence = payload.get("evidence")
+        if not isinstance(evidence, list):
+            evidence = evidence_ids
+        evidence = [str(item) for item in evidence if str(item) in valid_ids] or evidence_ids
+        return {
+            "answer": answer.strip(),
+            "evidence": evidence,
+            "human_review_prompt": str(
+                payload.get("human_review_prompt", "Check that this combined answer matches each tool result.")
+            ),
+            "llm_output_format": "json",
+        }
+
+    @staticmethod
+    def _deterministic_compound_answer(
+        task_plan: list[CompoundTask],
+        results: dict[str, dict[str, Any]],
+    ) -> str:
+        labels = {
+            "phase_prediction": "Next phase forecast",
+            "explain_state": "Current state",
+            "retrieve_similar": "Similar historical windows",
+            "followup_analysis": "Follow-up analysis",
+        }
+        sections = []
+        for task in task_plan:
+            answer = results.get(task, {}).get("answer")
+            if isinstance(answer, str) and answer.strip():
+                sections.append(f"{labels[task]}: {answer.strip()}")
+        return "\n\n".join(sections) if sections else UNSUPPORTED_REQUEST_ANSWER
+
+    def _synthesize_response(self, state: HITLAgentState) -> HITLAgentState:
+        task_plan = list(state.get("task_plan") or [])
+        raw_results = dict(state.get("compound_results") or {})
+        if state.get("route") == "memory_followup":
+            result = dict(raw_results.get("followup_analysis") or {})
+            result.update({
+                "task_plan": task_plan,
+                "completed_tasks": list(state.get("completed_tasks") or []),
+            })
+            return {
+                **state,
+                "result": result,
+                "trace": self._append_trace(state, "response:synthesize:memory_followup"),
+            }
+
+        compact_results = {
+            task: self._compact_compound_result(raw_results.get(task, {}))
+            for task in task_plan
+        }
+        llm_payload = self._llm_compound_answer(state["question"], task_plan, compact_results)
+        if llm_payload:
+            answer = llm_payload["answer"]
+        elif state.get("request_mode") == "single" and task_plan:
+            answer = raw_results.get(task_plan[0], {}).get("answer") or UNSUPPORTED_REQUEST_ANSWER
+        else:
+            answer = self._deterministic_compound_answer(task_plan, raw_results)
+        evidence_pack: dict[str, Any] = {
+            "compound_tasks": task_plan,
+            "compound_results": compact_results,
+        }
+        phase_result = raw_results.get("phase_prediction", {})
+        phase_payload = phase_result.get("phase_prediction") if isinstance(phase_result, dict) else None
+        phase_evidence = phase_payload.get("evidence", {}) if isinstance(phase_payload, dict) else {}
+        if phase_evidence:
+            evidence_pack["live_phase_prediction"] = phase_evidence
+        state_result = raw_results.get("explain_state", {})
+        state_evidence = state_result.get("evidence_pack") if isinstance(state_result, dict) else {}
+        if not isinstance(state_evidence, dict):
+            state_evidence = state_result.get("evidence") if isinstance(state_result.get("evidence"), dict) else {}
+        if isinstance(state_evidence.get("current_state"), dict):
+            evidence_pack["current_state"] = state_evidence["current_state"]
+        retrieval_result = raw_results.get("retrieve_similar", {})
+        similar_windows = retrieval_result.get("similar_windows", []) if isinstance(retrieval_result, dict) else []
+        if similar_windows:
+            evidence_pack["similar_windows"] = similar_windows
+        followup_result = raw_results.get("followup_analysis", {})
+        followup_analysis = (
+            followup_result.get("followup_analysis")
+            if isinstance(followup_result, dict)
+            else None
+        )
+        if isinstance(followup_analysis, dict) and followup_analysis:
+            evidence_pack["followup_analysis"] = followup_analysis
+
+        if state.get("request_mode") == "single" and task_plan:
+            task = task_plan[0]
+            result = dict(raw_results.get(task, {}))
+            if llm_payload:
+                result["mode"] = f"llm_{task}"
+                result["llm_evidence"] = llm_payload.get("evidence", [])
+            result.update({
+                "explanation_mode": "llm_rag" if llm_payload else "heuristic",
+                "answer": answer,
+                "task_plan": task_plan,
+                "completed_tasks": list(state.get("completed_tasks") or []),
+                "human_review_prompt": (
+                    llm_payload.get("human_review_prompt")
+                    if llm_payload
+                    else result.get("human_review_prompt", "Check this answer against the tool evidence.")
+                ),
+                "task_debug": {
+                    "llm_attempted": bool(
+                        self.pipeline.enable_llm and self.pipeline.llm_available and self.pipeline.reasoner
+                    ),
+                    "llm_used": bool(llm_payload),
+                    "llm_output_format": llm_payload.get("llm_output_format") if llm_payload else None,
+                },
+            })
+            return {
+                **state,
+                "result": result,
+                "trace": self._append_trace(state, "response:synthesize:single"),
+            }
+
+        result: dict[str, Any] = {
+            "mode": "compound_request",
+            "explanation_mode": "llm_rag" if llm_payload else "heuristic",
+            "answer": answer,
+            "compound_tasks": task_plan,
+            "compound_results": compact_results,
+            "followup_operations": list(state.get("followup_operations") or []),
+            "evidence": llm_payload.get("evidence", []) if llm_payload else [f"compound:{task}" for task in task_plan],
+            "evidence_pack": evidence_pack,
+            "human_review_prompt": (
+                llm_payload.get("human_review_prompt")
+                if llm_payload
+                else "Check each section against the corresponding tool result."
+            ),
+            "compound_debug": {
+                "llm_attempted": bool(
+                    self.pipeline.enable_llm and self.pipeline.llm_available and self.pipeline.reasoner
+                ),
+                "llm_used": bool(llm_payload),
+                "llm_output_format": llm_payload.get("llm_output_format") if llm_payload else None,
+                "completed_tasks": list(state.get("completed_tasks") or []),
+            },
+        }
+        if isinstance(phase_payload, dict):
+            result["phase_prediction"] = phase_payload
+        if isinstance(similar_windows, list):
+            result["similar_windows"] = similar_windows
+        if isinstance(followup_analysis, dict):
+            result["followup_analysis"] = followup_analysis
+        return {
+            **state,
+            "result": result,
+            "trace": self._append_trace(state, "response:synthesize:compound"),
+        }
+
+    def _analyze_session_memory_followup(self, state: HITLAgentState) -> HITLAgentState:
         memory = state.get("memory") or {}
-        last = self._select_memory_result_for_question(state["question"], memory)
         selected_chunks = self._select_memory_chunks(state["question"], memory)
         payload = {
             "current_question": state["question"],
-            "previous_result": last,
             "selected_memory": selected_chunks,
             "memory_summary": {
                 "stored_turns": len(memory.get("turns") or []) if isinstance(memory, dict) else 0,
@@ -448,10 +1084,15 @@ class ControlledHITLAgentGraph:
         llm_attempted = bool(selected_chunks and self.pipeline.enable_llm and self.pipeline.llm_available and self.pipeline.reasoner)
         llm_error = None
         try:
-            llm_payload = self._llm_memory_rag(state["question"], payload) if selected_chunks else None
-        except Exception as exc:
+            llm_payload = self._llm_memory_rag(state["question"], payload) if llm_attempted else None
+        except Exception:
             llm_payload = None
-            llm_error = str(exc)
+            # Never put raw provider exceptions (which can contain secrets) in a response.
+            llm_error = {"category": "memory_answer_error", "retryable": False}
+        if llm_attempted and not llm_payload and llm_error is None:
+            llm_error = getattr(self.pipeline.reasoner, "last_error", None)
+            if not isinstance(llm_error, dict):
+                llm_error = {"category": "invalid_answer", "retryable": False}
         memory_rag_debug = {
             "selected_chunk_ids": [str(chunk.get("evidence_id")) for chunk in selected_chunks],
             "selected_chunk_kinds": [str(chunk.get("kind")) for chunk in selected_chunks],
@@ -459,15 +1100,13 @@ class ControlledHITLAgentGraph:
             "llm_attempted": llm_attempted,
             "llm_used": bool(llm_payload),
             "llm_output_format": llm_payload.get("llm_output_format") if isinstance(llm_payload, dict) else None,
+            "llm_error": llm_error,
             "llm_fallback_reason": None
             if llm_payload
             else (
-                llm_error
-                or (
-                    f"LLM was not attempted: {', '.join(llm_blockers)}."
-                    if not llm_attempted
-                    else "LLM returned no valid JSON answer; deterministic memory-RAG fallback was used."
-                )
+                f"LLM was not attempted: {', '.join(llm_blockers)}."
+                if not llm_attempted
+                else f"LLM explanation unavailable: {(llm_error or {}).get('category', 'invalid_answer')}."
             ),
         }
         if llm_payload:
@@ -477,26 +1116,13 @@ class ControlledHITLAgentGraph:
                 "evidence_pack": payload,
                 "memory_rag_debug": memory_rag_debug,
             }
-        elif not selected_chunks:
+        else:
             result = {
-                "mode": "memory_rag_missing_context",
-                "answer": (
-                    "I do not have enough relevant session-memory evidence to answer that follow-up. "
-                    "Run `predict next phase`, `explain current live state`, or `retrieve similar historical windows` first."
-                ),
+                "mode": "memory_rag_unavailable" if selected_chunks else "memory_rag_missing_context",
+                "answer": UNSUPPORTED_REQUEST_ANSWER,
                 "evidence": [],
                 "evidence_pack": payload,
                 "memory_rag_debug": memory_rag_debug,
-                "human_review_prompt": "Run a core HITL tool first, then ask a grounded follow-up.",
-            }
-        else:
-            result = {
-                "mode": "memory_rag_followup",
-                "answer": self._memory_rag_followup_text(state["question"], last, selected_chunks),
-                "evidence": [chunk["evidence_id"] for chunk in selected_chunks],
-                "evidence_pack": payload,
-                "memory_rag_debug": memory_rag_debug,
-                "human_review_prompt": "Review whether this memory-grounded clarification matches the stored HITL evidence.",
             }
         return {
             **state,
@@ -689,13 +1315,30 @@ class ControlledHITLAgentGraph:
         for key in ("last_phase_result", "last_retrieval_result", "last_tool_result"):
             add_result_chunks(key, memory.get(key, {}) if isinstance(memory.get(key), dict) else {})
 
+        # Several memory slots can point to the same result. Send each piece of
+        # evidence once rather than repeating its table/answer under three IDs.
+        if any(chunk.get("kind") == "similar_windows" for chunk in chunks):
+            chunks.append({
+                "evidence_id": "memory:retrieval_distance_definition",
+                "kind": "retrieval_semantics",
+                "title": "Meaning of d / retrieval distance in historical windows",
+                "text": (
+                    "d (retrieval_distance) compares the query window's numerical wind-pattern "
+                    "embedding with a historical window's embedding. Smaller means a closer match; "
+                    "larger means less similar within the returned set. It is not a distance in meters, "
+                    "wind speed, probability, or a difference between token IDs or token sequences. "
+                    "The snapshot live-window retriever uses cosine distance between embeddings."
+                ),
+                "payload": {"field": "retrieval_distance", "smaller_is_closer": True},
+            })
         deduped: list[dict[str, Any]] = []
         seen: set[str] = set()
         for chunk in chunks:
-            evidence_id = str(chunk.get("evidence_id"))
-            if evidence_id in seen:
+            signature = json.dumps(_json_safe({"kind": chunk.get("kind"), "payload": chunk.get("payload")}),
+                                   sort_keys=True, ensure_ascii=False)
+            if signature in seen:
                 continue
-            seen.add(evidence_id)
+            seen.add(signature)
             deduped.append(chunk)
         return deduped
 
@@ -754,7 +1397,7 @@ class ControlledHITLAgentGraph:
         return chunks[: max(1, int(limit))]
 
     def _llm_memory_rag(self, question: str, payload: dict[str, Any]) -> dict[str, Any] | None:
-        if not self.pipeline.llm_available or not self.pipeline.reasoner:
+        if not self.pipeline.enable_llm or not self.pipeline.llm_available or not self.pipeline.reasoner:
             return None
         selected_ids = [str(chunk.get("evidence_id")) for chunk in payload.get("selected_memory", [])]
         review_chunks = [
@@ -773,8 +1416,9 @@ class ControlledHITLAgentGraph:
             "Do not say the model changed; say the session review state was accepted, flagged, or noted. "
             "When a human_review record is present, the answer must include one explicit sentence beginning exactly with "
             "'Human review state:' that summarizes the review action and note.\n"
-            "If the selected memory is insufficient, say exactly what core HITL tool should be run next.\n"
-            "Return only valid JSON with keys: answer, evidence, human_review_prompt.\n"
+            f"If the selected memory is insufficient or the request is unsupported, set answer to exactly: {UNSUPPORTED_REQUEST_ANSWER}\n"
+            "Return only valid JSON with keys: answer, evidence, human_review_prompt. "
+            "answer must be a nonempty string, not a nested object or list.\n"
             "The evidence value must be a list of evidence_id strings from selected_memory.\n\n"
             f"User question: {question}\n"
             f"Context:\n{json.dumps(_json_safe(payload), ensure_ascii=False)}\n"
@@ -785,7 +1429,7 @@ class ControlledHITLAgentGraph:
             result = self.pipeline.reasoner.invoke_json(prompt)
             raw_text = None
         if not isinstance(result, dict):
-            if raw_text:
+            if is_plain_text_answer(raw_text):
                 answer = str(raw_text).strip()
                 answer = self._ensure_review_sentence(answer, review_chunks)
                 return {
@@ -798,9 +1442,9 @@ class ControlledHITLAgentGraph:
                 }
             return None
         answer = result.get("answer")
-        if not answer:
+        if not isinstance(answer, str) or not answer.strip():
             return None
-        answer = self._ensure_review_sentence(str(answer), review_chunks)
+        answer = self._ensure_review_sentence(answer.strip(), review_chunks)
         evidence = result.get("evidence")
         if not isinstance(evidence, list):
             evidence = selected_ids
@@ -822,6 +1466,8 @@ class ControlledHITLAgentGraph:
 
     @staticmethod
     def _ensure_review_sentence(answer: str, review_chunks: list[dict[str, Any]]) -> str:
+        if answer.strip() == UNSUPPORTED_REQUEST_ANSWER:
+            return UNSUPPORTED_REQUEST_ANSWER
         if not review_chunks or "Human review state:" in answer:
             return answer
         review = review_chunks[0].get("payload", {}) if isinstance(review_chunks[0].get("payload"), dict) else {}
@@ -860,6 +1506,26 @@ class ControlledHITLAgentGraph:
                     if similar_rows:
                         break
             if similar_rows:
+                asks_distance_meaning = bool(question_terms & {"d", "distance"}) and bool(
+                    question_terms & {"mean", "means", "meaning", "stands", "represent", "represents", "explain"}
+                ) and not bool(question_terms & {"closest", "nearest", "farthest", "furthest", "least", "most"})
+                if asks_distance_meaning:
+                    return (
+                        "d stands for retrieval distance: a score comparing a past window's numerical "
+                        "wind-condition representation with the query window. A smaller d means a closer "
+                        "match in that representation. It is not a distance in meters, a wind speed, "
+                        "or a forecast probability. This explains the stored retrieval results; no new retrieval was run."
+                    )
+                if "explain" in question_terms and question_terms & {"data", "rows", "table", "results"}:
+                    return (
+                        f"The {len(similar_rows)} stored rows are past observation windows returned as "
+                        "similar examples. window_id identifies each observation period; regime_name names "
+                        "its wind pattern; d is retrieval distance, with smaller values indicating closer "
+                        "matches to the query window. Wind-speed fields, when present, are measured in m/s. "
+                        "Closest and farthest comparisons apply to these retrieved rows. These historical "
+                        "examples are evidence for comparison, not predictions of the next window. "
+                        "No new retrieval was run."
+                    )
                 def _distance(row: dict[str, Any]) -> float:
                     try:
                         return float(row.get("retrieval_distance"))
@@ -1092,7 +1758,8 @@ class ControlledHITLAgentGraph:
                 route = llm_route["intent"]
                 router.update(llm_route)
         elif decision.intent == "feedback" or state.get("feedback_action"):
-            route = "feedback"
+            route = "out_of_scope"
+            router["reason"] = "Human feedback actions are currently disabled."
         elif decision.intent == "retrieve_similar":
             route = "retrieve_similar"
         elif decision.intent == "numeric_forecast":
@@ -1104,7 +1771,7 @@ class ControlledHITLAgentGraph:
         else:
             route = "explain_state"
 
-        if decision.allowed and decision.confidence < 0.70 and route not in {"feedback", "retrieve_similar"}:
+        if decision.allowed and decision.confidence < 0.70 and route != "retrieve_similar":
             llm_route = self._llm_route_intent(state, decision)
             if llm_route:
                 route = llm_route["intent"]
@@ -1128,8 +1795,6 @@ class ControlledHITLAgentGraph:
             "explain_state",
             "retrieve_similar",
             "phase_prediction",
-            "feedback",
-            "memory_followup",
             "out_of_scope",
         }
         memory = state.get("memory") or {}
@@ -1141,10 +1806,8 @@ class ControlledHITLAgentGraph:
         prompt = (
             "You are a constrained intent router for a wind-forecasting HITL system.\n"
             "Classify the user request into exactly one allowed intent.\n"
-            "Allowed intents: explain_state, retrieve_similar, phase_prediction, feedback, "
-            "memory_followup, out_of_scope.\n"
+            "Allowed intents: explain_state, retrieve_similar, phase_prediction, out_of_scope.\n"
             "Use phase_prediction for forecast or prediction requests, including raw wind-speed wording.\n"
-            "Use memory_followup only when the user is asking a clarification about the previous result.\n"
             "Use out_of_scope for unsupported requests, broad what-if simulation, aviation safety advice, "
             "or non-wind topics.\n"
             "Do not answer the user. Return only JSON with keys: intent, confidence, reason.\n\n"
@@ -1178,138 +1841,6 @@ class ControlledHITLAgentGraph:
     @staticmethod
     def _route_after_relevance(state: HITLAgentState) -> RouteName:
         return state.get("route", "out_of_scope")
-
-    def _run_feedback(self, state: HITLAgentState) -> HITLAgentState:
-        result = self.pipeline.record_feedback(
-            question=state.get("effective_question") or state["question"],
-            action=state.get("feedback_action"),
-            label=state.get("feedback_label", ""),
-            note=state.get("feedback_note", ""),
-            reviewer=state.get("reviewer", "human"),
-            filter_decision=state["filter_decision"],
-        )
-        review_state = self._build_review_state(state, result)
-        if review_state:
-            self._append_review_state_log(review_state)
-            result = {
-                **result,
-                "review_state": review_state,
-                "answer": self._review_answer_text(review_state),
-            }
-        return {**state, "result": result, "trace": self._append_trace(state, "tool:record_feedback")}
-
-    def _append_review_state_log(self, review_state: dict[str, Any]) -> None:
-        path = self.memory_store.path.parent / "hitl_review_state_log.jsonl"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(_json_safe(review_state), ensure_ascii=False) + "\n")
-
-    @staticmethod
-    def _parse_relabel_token(label: str, note: str) -> int | None:
-        text = f"{label} {note}".lower()
-        match = re.search(r"token\s*([0-9]+)", text)
-        if not match:
-            match = re.search(r"\b([0-9]+)\b", text)
-        if not match:
-            return None
-        try:
-            return int(match.group(1))
-        except Exception:
-            return None
-
-    def _build_review_state(self, state: HITLAgentState, result: dict[str, Any]) -> dict[str, Any] | None:
-        feedback = result.get("feedback_record") if isinstance(result.get("feedback_record"), dict) else {}
-        if not feedback:
-            return None
-
-        memory = state.get("memory") or {}
-        phase_result = memory.get("last_phase_result") if isinstance(memory.get("last_phase_result"), dict) else {}
-        if not phase_result:
-            phase_result = memory.get("last_tool_result") if isinstance(memory.get("last_tool_result"), dict) else {}
-        phase = phase_result.get("phase_evidence", {}) if isinstance(phase_result, dict) else {}
-        candidates = phase.get("candidate_next_phases", []) if isinstance(phase, dict) else []
-        top = candidates[0] if candidates else {}
-
-        action = str(feedback.get("action") or "note").lower()
-        label = str(feedback.get("label") or "")
-        note = str(feedback.get("note") or "")
-        if action == "reject":
-            action = "flag"
-        elif action == "relabel":
-            action = "note"
-        human_token = None
-        model_token = top.get("token_id")
-        try:
-            model_token = int(model_token) if model_token is not None else None
-        except Exception:
-            model_token = None
-
-        current_live_state = phase.get("current_live_state") if isinstance(phase, dict) else {}
-        source_window = None
-        source_window_type = "historical_context"
-        if isinstance(current_live_state, dict) and current_live_state.get("window_id"):
-            source_window = current_live_state.get("window_id")
-            source_window_type = "live_input_window"
-        elif phase_result.get("window_id") or result.get("window_id"):
-            source_window = phase_result.get("window_id") or result.get("window_id")
-
-        status_map = {
-            "accept": "accepted",
-            "flag": "flagged",
-            "note": "noted",
-        }
-        return {
-            "evidence_id": "memory:last_review",
-            "review_target": "last_phase_result" if candidates else "last_tool_result",
-            "feedback_id": feedback.get("feedback_id"),
-            "created_at": feedback.get("created_at"),
-            "reviewer": feedback.get("reviewer", "human"),
-            "action": action,
-            "status": status_map.get(action, action),
-            "label": label,
-            "note": note,
-            "window_id": source_window,
-            "source_window_type": source_window_type,
-            "token_sequence": phase.get("live_token_sequence") or phase.get("token_sequence") or [],
-            "model_predicted_token": model_token,
-            "model_predicted_regime": top.get("regime_name"),
-            "model_probability": top.get("probability"),
-            "model_count": top.get("count"),
-            "model_support": top.get("support") or phase.get("support"),
-            "human_preferred_token": human_token,
-            "candidate_next_phases": candidates[:5],
-        }
-
-    @staticmethod
-    def _review_answer_text(review: dict[str, Any], base_answer: Any = None) -> str:
-        action = review.get("action")
-        model_token = review.get("model_predicted_token")
-        note = review.get("note")
-        source_window = review.get("window_id") or "unknown"
-        source_label = (
-            "live input window"
-            if review.get("source_window_type") == "live_input_window"
-            else "source context window"
-        )
-        predicted_regime = review.get("model_predicted_regime")
-        target = (
-            f"forecasted next token {model_token}"
-            if model_token is not None
-            else "the last forecasted next token"
-        )
-        if predicted_regime:
-            target = f"{target} ({predicted_regime})"
-
-        if action == "accept":
-            detail = f"Accepted {target}."
-        elif action == "flag":
-            detail = f"Flagged {target} for review."
-        else:
-            detail = f"Saved a note for {target}."
-        if note:
-            detail = f"{detail} Note: {note}"
-        clarification = f"{detail} Forecast {source_label}: {source_window}."
-        return clarification if not base_answer else f"{base_answer} {clarification}"
 
     def _run_retrieval(self, state: HITLAgentState) -> HITLAgentState:
         if state.get("target_predicted_numeric_window"):
@@ -1454,7 +1985,11 @@ class ControlledHITLAgentGraph:
 
         if self.pipeline.enable_llm and not self.pipeline.llm_available:
             warnings.append("LLM was requested but is unavailable; deterministic fallback was used.")
-        if not self.pipeline.enable_rag and state.get("route") in {"retrieve_similar", "phase_prediction"}:
+        if not self.pipeline.enable_rag and state.get("route") in {
+            "retrieve_similar",
+            "phase_prediction",
+            "compound_request",
+        }:
             warnings.append("RAG/retrieval evidence is disabled for this run.")
 
         phase_payload = result.get("phase_prediction", {})
@@ -1484,13 +2019,25 @@ class ControlledHITLAgentGraph:
     def _finalize(self, state: HITLAgentState) -> HITLAgentState:
         if state.get("route") == "out_of_scope":
             result = {
-                "answer": (
-                    "I cannot handle that request in this HITL pipeline. Ask about semantic phase predictions, "
-                    "compressed wind states, similar historical regimes, or human feedback."
-                )
+                "mode": "out_of_scope",
+                "answer": UNSUPPORTED_REQUEST_ANSWER,
             }
         else:
             result = dict(state.get("result") or {})
+
+        # Preserve the scientific tables, but never save a canned explanation as
+        # though it were displayed to a public visitor whose LLM call failed.
+        needs_llm = self.pipeline.enable_llm or getattr(self.pipeline, "require_llm_explanations", False)
+        if needs_llm and state.get("route") in {
+            "phase_prediction",
+            "retrieve_similar",
+            "explain_state",
+            "compound_request",
+        }:
+            mode = str(result.get("mode") or "")
+            if (result.get("explanation_mode") == "heuristic" or mode.startswith("deterministic_")
+                    or mode in {"heuristic", "hitl_gru_live_phase_prediction"}):
+                result["answer"] = UNSUPPORTED_REQUEST_ANSWER
 
         agent_trace = self._append_trace(state, "finalize")
         result["agent_graph"] = {
@@ -1501,6 +2048,9 @@ class ControlledHITLAgentGraph:
             "route": state.get("route"),
             "router": state.get("router", {}),
             "rewrite": state.get("rewrite"),
+            "task_plan": state.get("task_plan", []),
+            "completed_tasks": state.get("completed_tasks", []),
+            "followup_operations": state.get("followup_operations", []),
             "trace": agent_trace,
             "critic_warnings": state.get("critic_warnings", []),
         }
@@ -1542,7 +2092,9 @@ class ControlledHITLAgentGraph:
             memory["last_tool_result"] = compact
             if compact.get("phase_evidence", {}).get("candidate_next_phases"):
                 memory["last_phase_result"] = compact
-            if state.get("route") == "retrieve_similar":
+            if state.get("route") == "retrieve_similar" or (
+                state.get("route") == "compound_request" and compact.get("similar_windows")
+            ):
                 memory["last_retrieval_result"] = compact
             if state.get("route") == "feedback" and final_result.get("review_state"):
                 reviews = list(memory.get("reviews") or [])[-9:]

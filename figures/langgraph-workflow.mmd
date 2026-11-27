@@ -1,0 +1,30 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	load_session_memory(load_session_memory)
+	rewrite_request(rewrite_request)
+	plan_request(plan_request)
+	task_controller(task_controller)
+	controlled_tool_node(controlled_tool_node)
+	synthesize_response(synthesize_response)
+	critic_check(critic_check)
+	finalize(finalize)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> load_session_memory;
+	controlled_tool_node --> task_controller;
+	critic_check --> finalize;
+	load_session_memory --> rewrite_request;
+	plan_request -. &nbsp;out_of_scope&nbsp; .-> finalize;
+	plan_request -. &nbsp;execute&nbsp; .-> task_controller;
+	rewrite_request --> plan_request;
+	synthesize_response --> critic_check;
+	task_controller -. &nbsp;run_tool&nbsp; .-> controlled_tool_node;
+	task_controller -. &nbsp;synthesize&nbsp; .-> synthesize_response;
+	finalize --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

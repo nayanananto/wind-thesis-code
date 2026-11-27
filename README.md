@@ -15,29 +15,27 @@ Reproducibility code and saved outputs for the thesis/paper **Interpretable Sema
 ## How the HITL Interface Works
 
 <p align="center">
-  <img src="figures/workflow_diagram.png" alt="Workflow diagram showing the web server starting a LangGraph state machine that loads session memory, detects follow-ups, routes a new request to one task, builds a prompt, calls the LangChain LLM, and saves the turn" width="100%">
+  <img src="figures/langgraph-workflow.png" alt="LangGraph workflow showing session memory, request rewriting, task planning, a controller and controlled-tool loop, response synthesis, checking, and finalization" width="100%">
 </p>
 
-Each question goes through a small LangGraph state machine. The graph is controlled, not free-form: a fixed set of steps passes a shared state from one step to the next. The LLM never decides which step runs.
+Each question goes through a controlled LangGraph state machine. The graph uses a fixed set of nodes and tools, so the LLM cannot invent actions or change a forecast. Requests may contain one task or several tasks in the same prompt.
 
 **1. Session and memory.** The web server gives each user a session, and the session ID is used as the conversation thread. The first step loads that thread's past turns and last results from a small JSON memory file.
 
-**2. Follow-up or new request?** The graph checks whether the question refers back to the last answer, such as "why was this phase selected?". It uses simple rules: stored memory plus cue words in the question.
+**2. Rewrite and plan.** `rewrite_request` resolves references to an earlier answer, such as "why was this phase selected?". It marks whether a follow-up should use results produced in the current prompt or evidence stored in session memory. `plan_request` then creates an ordered task queue. A single request has one task; a compound request can combine forecasting, retrieval, state explanation, and follow-up analysis.
 
-- **Follow-up:** the graph picks the most relevant notes from memory and asks the LLM to answer using only those notes. No task runs again.
-- **New request:** a router picks one of three tasks based on LLM's decision and keyword matching as fallback. Sample questions are: predict the next wind phase, find similar past windows, or explain the current wind state.
-
-**3. Task, evidence, then explanation.** Each task runs ordinary Python code first:
+**3. Controller and controlled tools.** `task_controller` sends one queued task at a time to `controlled_tool_node`. That node can run:
 
 - **Forecaster:** predicts the next wind phase with a variable-order Markov-style transition model. It counts which phase followed the same recent regime sequence in past data, and falls back to shorter sequences when there is too little history.
 - **Retriever:** finds the nearest historical windows using cosine similarity on embeddings.
-- **Explainer:** collects the current state and its regime profile.
+- **State explainer:** collects the current state and its regime profile.
+- **Follow-up analyser:** answers from current-turn results or selected session memory without rerunning a forecast or retrieval unnecessarily.
 
-The result is an evidence pack. It is put into a prompt and sent to the LLM through LangChain (`ChatOpenAI`). The LLM only turns the evidence into plain language. It does not choose the task or change the prediction.
+After a task finishes, its structured result is stored and control returns to the controller. The loop continues until the queue is empty. Scientific tools run without the LLM and produce evidence that can be checked independently.
 
-**4. Save and reply.** The final step stores the result and a short trace in session memory, so the next question can build on it, and returns the answer. The user can also accept, flag, or add a note to a result; these are saved in a feedback log.
+**4. Synthesize, check, and reply.** When new scientific tasks are complete, `synthesize_response` uses LangChain (`ChatOpenAI`) to turn their collected evidence into one grounded answer. A session-memory follow-up is answered from its selected memory evidence inside the same controlled-tool path, without a second LLM call. `critic_check` checks the result, and `finalize` stores the answer and execution trace before returning it to the interface.
 
-**LangGraph and LangChain.** LangGraph manages the flow: steps, shared state and routing. LangChain is only used as the LLM client inside those steps.
+**LangGraph and LangChain.** LangGraph manages shared state, task planning, the controller loop, tool execution, and follow-up handling. LangChain connects the approved evidence to the LLM for the final explanation. Deterministic routing rules are primary; an optional LLM fallback can only choose among the supported request types.
 
 ## Method at a Glance
 
@@ -48,7 +46,7 @@ The result is an evidence pack. It is put into a prompt and sent to the LLM thro
 5. Discretize embeddings with mini-batch k-means into `8` wind-regime tokens and retain distance to the assigned centroid as an atypicality score.
 6. Evaluate continuous forecasting from raw, PCA, autoencoder, and regime-token representations.
 7. Evaluate next-regime classification with persistence, a variable-order transition-count model, and a GRU.
-8. Deploy the transition-count predictor in a LangGraph-controlled HITL workflow with exact nearest-neighbor analog retrieval, OpenAI-backed grounded explanations/follow-ups, session memory, and accept/flag/note feedback.
+8. Deploy the transition-count predictor in a LangGraph-controlled workflow with exact nearest-neighbor analog retrieval, grounded LLM explanations, a controlled task loop, and session-based follow-ups.
 
 The language model is used after clustering to assign concise human-readable regime names from cluster profiles and in the HITL explanation layer. It does not assign token IDs, alter embeddings, train forecasting models, or change quantitative predictions.
 
@@ -67,7 +65,7 @@ The DDC benchmark transfers the KBOS-selected neural and gradient-boosting confi
 
 ## Repository Layout
 
-- `app/` - preprocessing, semantic encoding/tokenization, exact nearest-neighbor retrieval, phase forecasting, LangGraph routing, LLM grounding, memory, and feedback modules.
+- `app/` - preprocessing, semantic encoding/tokenization, exact nearest-neighbor retrieval, phase forecasting, LangGraph routing, LLM grounding, and session-memory modules.
 - `scripts/` - semantic build, live METAR adapter, HITL CLI/UI, plotting, carbon calculation, metadata normalization, and anonymous artifact export.
 - `theory_experiments/` - two-seed continuous/phase experiments, GRU and transition studies, gradient boosting, and token-state LSTM evaluation.
 - `backtest_wind.py` - shared rolling-origin continuous-forecast engine imported by the LSTM and gradient-boosting experiment runners.
@@ -142,7 +140,7 @@ python scripts\run_hitl_ui.py --host 127.0.0.1 --port 7861
 
 Open `http://127.0.0.1:7861`. On startup the UI attempts to fetch current KBOS observations from the AviationWeather METAR API and rebuild the live semantic state with the committed KBOS encoder/tokenizer. If the network is unavailable, it uses the committed live snapshot. An alternative remote snapshot can be configured with `WIND_LIVE_DATA_BASE_URL`; no personal repository URL is hard-coded.
 
-The fixed UI configuration uses the transition-count phase predictor, top-3 candidates, five analog windows, LangGraph routing, retrieval/memory grounding, and feedback logging. The continuous numeric forecaster is intentionally disabled in the final HITL workflow.
+The fixed UI configuration uses the transition-count phase predictor, top-3 candidates, five analog windows, controlled LangGraph task routing, retrieval grounding, and session-based follow-ups. The continuous numeric forecaster is intentionally disabled in the final workflow.
 
 ## Build a New Station
 
@@ -177,5 +175,5 @@ The script rejects repository URLs, local paths, and any supplied identity marke
 
 - Retrieval is implemented with scikit-learn's exact cosine `NearestNeighbors` index; FAISS is not required.
 - All committed metadata uses project-relative paths and resolves against the current checkout.
-- API keys, virtual environments, caches, session memory, and feedback logs are excluded from version control.
+- API keys, virtual environments, caches, and session-memory logs are excluded from version control.
 - NOAA/ASOS and AviationWeather data remain subject to their source terms and provenance.

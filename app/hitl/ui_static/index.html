@@ -3,80 +3,64 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f4f8f6" />
     <title>Wind Phase Review Lab</title>
-    <link rel="stylesheet" href="/static/styles.css" />
+    <!-- Bump both asset versions together when updating the UI. -->
+    <link rel="stylesheet" href="/static/styles.css?v=20261017-ui8" />
   </head>
   <body>
     <main class="shell">
-      <aside class="side">
-        <section class="hero-card">
+      <section class="workspace" aria-label="Wind forecast conversation">
+        <header class="topbar">
           <div class="brand">
-            <span class="mark" aria-hidden="true"></span>
+            <span class="mark" aria-hidden="true">
+              <svg width="29" height="29" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round">
+                <path d="M5 11h15a4 4 0 1 0-4-4M5 17h20a3 3 0 1 0-3-3M5 23h10a3 3 0 1 1-3 3" />
+              </svg>
+            </span>
             <div>
-              <p class="eyebrow">Semantic Wind Thesis</p>
-              <h1>Phase Review Lab</h1>
+              <h1>Wind Phase Review Lab</h1>
+              <p class="subtitle">KBOS Wind State Review</p>
             </div>
           </div>
-          <p class="hero-copy">
-            Inspect live compressed wind states, forecast semantic phases, retrieve historical analogs,
-            and record human review feedback.
-          </p>
-          <div id="metadataStatus" class="status-chip">Loading live context...</div>
-        </section>
-
-        <section class="control-card">
-          <p class="panel-title">Core Actions</p>
-          <div class="quick">
-            <button data-prompt="predict next phase">Predict Phase</button>
-            <button data-prompt="explain current live state">Explain State</button>
-            <button data-prompt="retrieve similar historical windows">Similar Windows</button>
-            <button data-prompt="why was this phase selected?">Why This Phase?</button>
-            <button data-prompt="accept this prediction">Accept Forecast</button>
-            <button data-prompt="flag this prediction because support should be reviewed">Flag Forecast</button>
-            <button data-prompt="note this forecast for later review">Add Note</button>
-          </div>
-        </section>
-
-        <section class="control-card protocol-card">
-          <p class="panel-title">Active Protocol</p>
-          <div class="protocol-list" aria-label="Fixed HITL configuration">
-            <span class="protocol-badge">LLM follow-up on</span>
-            <span class="protocol-badge">Memory/RAG on</span>
-            <span class="protocol-badge">Live state on</span>
-            <span class="protocol-badge">Transition predictor</span>
-          </div>
-          <p class="protocol-note">
-            The review workflow now runs with fixed thesis defaults: latest live METAR semantic state,
-            top-3 phase candidates, five historical analogs, and persistent review memory.
-          </p>
-        </section>
-      </aside>
-
-      <section class="workspace">
-        <header class="topbar">
-          <div>
-            <p class="eyebrow">Human-in-the-loop semantic forecasting</p>
-            <h2>Live KBOS Wind State Review</h2>
-          </div>
-          <div class="topbar-meta">
-            <span>Transition evidence</span>
-            <span>Historical analogs</span>
-            <span>Reviewer memory</span>
-          </div>
+          <span id="llmStatus" class="model-status">Loading explanation mode...</span>
         </header>
+        <p id="metadataStatus" class="data-caption">Loading observation context...</p>
 
-        <section id="messages" class="messages" aria-live="polite"></section>
+        <section id="messages" class="messages is-empty" aria-label="Conversation" aria-live="polite">
+          <div id="welcomeState" class="welcome">
+            <p class="welcome-label">Wind, with context.</p>
+            <h2>Explore the next wind phase.</h2>
+            <p>Start with a phase forecast, then explore its evidence.</p>
+          </div>
+        </section>
 
-        <form id="chatForm" class="composer">
-          <textarea
-            id="question"
-            rows="2"
-            placeholder="Ask: predict next phase, explain current live state, retrieve similar windows, accept, flag, or note this prediction"
-          ></textarea>
-          <button type="submit">Run</button>
-        </form>
+        <footer class="composer-area">
+          <div class="prompt-suggestions" aria-label="Example prompts">
+            <span class="hint-label">Try asking</span>
+            <button id="promptSuggestion" class="suggestion-button" type="button" title="Use this example prompt">
+              <span id="promptSuggestionText">Predict the next wind phase</span>
+            </button>
+            <button id="pauseSuggestions" class="pause-button" type="button" aria-label="Pause prompt suggestions" aria-pressed="false" title="Pause examples">
+              <svg class="pause-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-linecap="round" aria-hidden="true">
+                <path d="M7 5v10M13 5v10" />
+              </svg>
+              <svg class="play-icon" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-linejoin="round" aria-hidden="true">
+                <path d="m7 5 8 5-8 5Z" />
+              </svg>
+            </button>
+          </div>
+          <form id="chatForm" class="composer">
+            <textarea id="question" rows="2" maxlength="1500" aria-label="Your question" placeholder="Ask about the wind forecast or its evidence..."></textarea>
+            <button id="sendButton" class="send-button" type="submit" aria-label="Send question" title="Send question">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 19V5m-6 6 6-6 6 6" />
+              </svg>
+            </button>
+          </form>
+        </footer>
       </section>
     </main>
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=20261017-ui8"></script>
   </body>
 </html>

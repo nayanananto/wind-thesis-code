@@ -13,7 +13,8 @@ import pandas as pd
 from app.hitl.feedback_store import FeedbackRecord, FeedbackStore
 from app.hitl.hitl_model_artifacts import predict_numeric_lstm, predict_phase_gru
 from app.hitl.semantic_review import load_semantic_metadata
-from app.llm.semantic_reasoner import SemanticReasoner
+from app.llm.semantic_reasoner import SemanticReasoner, is_plain_text_answer
+from app.hitl.messages import UNSUPPORTED_REQUEST_ANSWER
 from app.phase_forecasting.semantic_phase_forecaster import PhaseForecastConfig, SemanticPhaseForecaster
 from app.semantic.retrieval.similar_regime_search import SimilarRegimeSearcher
 
@@ -821,7 +822,7 @@ class StandaloneHITLPipeline:
             "You are the standalone HITL explanation layer for a wind forecasting system.\n"
             "Only answer using the provided structured wind-forecasting context.\n"
             "Do not answer unrelated general questions.\n"
-            "If evidence is insufficient, say so rather than guessing.\n"
+            f"If evidence is insufficient or the request is unsupported, set answer to exactly: {UNSUPPORTED_REQUEST_ANSWER}\n"
             "Cite the evidence_id values you used inside the evidence field.\n"
             "Return only valid JSON with keys: answer, evidence, human_review_prompt.\n"
             "For live_phase_prediction or phase_prediction, write 4-6 clear sentences explaining: "
@@ -831,7 +832,22 @@ class StandaloneHITLPipeline:
             f"User question: {question}\n"
             f"Context:\n{json.dumps(_json_safe(payload), ensure_ascii=False)}\n"
         )
-        return self.reasoner.invoke_json(prompt)
+        if hasattr(self.reasoner, "invoke_json_with_raw"):
+            result, raw = self.reasoner.invoke_json_with_raw(prompt)
+            # Plain prose is still an LLM answer, not a deterministic fallback.
+            if result is None and is_plain_text_answer(raw):
+                result = {"answer": raw.strip(), "evidence": [], "llm_output_format": "raw_text"}
+        else:
+            result = self.reasoner.invoke_json(prompt)
+        if not isinstance(result, dict) or not isinstance(result.get("answer"), str) or not result["answer"].strip():
+            return None
+        # The model supplies wording, never routing or execution/status fields.
+        answer = {"answer": result["answer"].strip(),
+                  "evidence": result.get("evidence", []),
+                  "human_review_prompt": result.get("human_review_prompt", "")}
+        if result.get("llm_output_format") == "raw_text":
+            answer["llm_output_format"] = "raw_text"
+        return answer
 
     def explain_forecast(self, question: str) -> dict[str, Any]:
         payload = self.build_evidence_pack(include_neighbors=True)
@@ -1547,11 +1563,8 @@ class StandaloneHITLPipeline:
         if not decision.allowed:
             return {
                 **base,
-                "answer": (
-                    "I cannot handle that request in this HITL pipeline. "
-                    "Ask about semantic phase predictions, compressed wind states, similar historical regimes, "
-                    "or provide human feedback such as accept, flag, or note."
-                ),
+                "mode": "out_of_scope",
+                "answer": UNSUPPORTED_REQUEST_ANSWER,
             }
 
         if decision.intent == "feedback" or feedback_action:
