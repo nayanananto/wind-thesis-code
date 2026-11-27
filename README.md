@@ -15,7 +15,7 @@ Reproducibility code and saved outputs for the thesis/paper **Interpretable Sema
 ## How the HITL Interface Works
 
 <p align="center">
-  <img src="figures/langgraph-workflow.png" alt="LangGraph workflow showing session memory, request rewriting, task planning, a controller and controlled-tool loop, response synthesis, checking, and finalization" width="100%">
+  <img src="figures/langgraph-workflow.png" alt="LangGraph workflow showing session memory, request rewriting, task planning, a controller and controlled-tool loop, response synthesis, checking, and finalization" width="55%">
 </p>
 
 Each question goes through a controlled LangGraph state machine. The graph uses a fixed set of nodes and tools, so the LLM cannot invent actions or change a forecast. Requests may contain one task or several tasks in the same prompt.
@@ -35,7 +35,7 @@ After a task finishes, its structured result is stored and control returns to th
 
 **4. Synthesize, check, and reply.** When new scientific tasks are complete, `synthesize_response` uses LangChain (`ChatOpenAI`) to turn their collected evidence into one grounded answer. A session-memory follow-up is answered from its selected memory evidence inside the same controlled-tool path, without a second LLM call. `critic_check` checks the result, and `finalize` stores the answer and execution trace before returning it to the interface.
 
-**LangGraph and LangChain.** LangGraph manages shared state, task planning, the controller loop, tool execution, and follow-up handling. LangChain connects the approved evidence to the LLM for the final explanation. Deterministic routing rules are primary; an optional LLM fallback can only choose among the supported request types.
+**LangGraph and LangChain.** LangGraph manages shared state, task planning, the controller loop, tool execution, and follow-up handling. LangChain connects the approved evidence to the LLM. The LLM produces grounded explanations and helps resolve ambiguous requests, while its routing choices remain restricted to the system's supported request types.
 
 ## Method at a Glance
 
